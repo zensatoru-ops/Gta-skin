@@ -170,8 +170,19 @@ class DffParser private constructor(private val data: ByteArray) {
             fail(IssueCode.TOO_MANY_ELEMENTS, c.start, "hanimNodes=$nodes")
         }
         frame.hanimNodeCount = nodes
-        // Daftar node (flags, keyframe size, lalu 12 byte per node) tidak dibutuhkan
-        // untuk inspeksi; hanya jumlahnya yang dipakai validator.
+        // Daftar node: flags, keyframe size, lalu (nodeId, nodeIndex, flags) per node.
+        // Urutan daftar ini = urutan bone di Skin PLG.
+        // Node list: flags, keyframe size, then (nodeId, nodeIndex, flags) per node.
+        // This order is the bone order used by the Skin PLG.
+        if (nodes > 0 && r.remaining >= 8 + nodes * 12) {
+            r.skip(8)
+            val ids = IntArray(nodes)
+            for (k in 0 until nodes) {
+                ids[k] = r.i32()
+                r.skip(8)
+            }
+            frame.hanimNodeIds = ids
+        }
     }
 
     // ------------------------------------------------------------ geometry

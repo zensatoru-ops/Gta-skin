@@ -34,6 +34,8 @@ enum class IssueCode {
     SKIN_WEIGHT_SUM,
     SKIN_UNWEIGHTED_VERTICES,
     SKIN_BONE_COUNT_MISMATCH,
+    SKIN_BONE_ORDER_UNKNOWN,
+    SKIN_REST_POSE_DIFFERS,
 }
 
 data class Issue(

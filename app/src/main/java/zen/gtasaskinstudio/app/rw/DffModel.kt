@@ -25,6 +25,9 @@ class Frame(
 
     /** Jumlah node pada hierarki HAnim yang dimulai di frame ini (0 jika bukan akar hierarki). */
     var hanimNodeCount: Int = 0
+
+    /** Urutan ID node HAnim pada akar hierarki; indeks = indeks bone di Skin PLG. Kosong bila tidak terbaca. */
+    var hanimNodeIds: IntArray = IntArray(0)
 }
 
 class Material(

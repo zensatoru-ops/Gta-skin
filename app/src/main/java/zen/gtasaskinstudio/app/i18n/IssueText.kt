@@ -29,6 +29,8 @@ fun IssueCode.strKey(): StrKey = when (this) {
     IssueCode.SKIN_WEIGHT_SUM -> StrKey.IssueSkinWeightSum
     IssueCode.SKIN_UNWEIGHTED_VERTICES -> StrKey.IssueSkinUnweighted
     IssueCode.SKIN_BONE_COUNT_MISMATCH -> StrKey.IssueSkinBoneCount
+    IssueCode.SKIN_BONE_ORDER_UNKNOWN -> StrKey.IssueSkinBoneOrder
+    IssueCode.SKIN_REST_POSE_DIFFERS -> StrKey.IssueSkinRestPose
 }
 
 fun Severity.strKey(): StrKey = when (this) {

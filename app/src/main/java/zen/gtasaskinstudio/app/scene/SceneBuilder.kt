@@ -40,20 +40,30 @@ object SceneBuilder {
     fun geometryIndex(model: DffModel): Int =
         model.atomics.firstOrNull()?.geometry?.takeIf { it in model.geometries.indices } ?: 0
 
-    fun build(model: DffModel): SceneBuffers =
-        buildGeometry(model.geometries[geometryIndex(model)], model.frames)
+    fun build(model: DffModel): SceneBuffers {
+        val atomicFrame = model.atomics.firstOrNull()?.frame ?: -1
+        return buildGeometry(model.geometries[geometryIndex(model)], model, BindPose.frameWorld(model, atomicFrame))
+    }
 
-    private fun buildGeometry(g: Geometry, frames: List<Frame>): SceneBuffers {
+    private fun buildGeometry(g: Geometry, model: DffModel, atomic: BindPose.World): SceneBuffers {
+        val frames = model.frames
         val n = g.vertexCount
         val normals = g.normals ?: computeNormals(g)
+        val rot = atomic.rot
+        val tmp = FloatArray(3)
 
         val vertices = FloatArray(n * 6)
         var minX = Float.POSITIVE_INFINITY; var minY = minX; var minZ = minX
         var maxX = Float.NEGATIVE_INFINITY; var maxY = maxX; var maxZ = maxX
         for (i in 0 until n) {
-            val x = g.positions[i * 3]; val y = g.positions[i * 3 + 1]; val z = g.positions[i * 3 + 2]
+            // Transform frame atomic: mesh -> dunia (identitas pada sampel Alice).
+            atomic.point(g.positions[i * 3], g.positions[i * 3 + 1], g.positions[i * 3 + 2], tmp, 0)
+            val x = tmp[0]; val y = tmp[1]; val z = tmp[2]
             vertices[i * 6] = x; vertices[i * 6 + 1] = y; vertices[i * 6 + 2] = z
-            vertices[i * 6 + 3] = normals[i * 3]; vertices[i * 6 + 4] = normals[i * 3 + 1]; vertices[i * 6 + 5] = normals[i * 3 + 2]
+            val nx0 = normals[i * 3]; val ny0 = normals[i * 3 + 1]; val nz0 = normals[i * 3 + 2]
+            vertices[i * 6 + 3] = nx0 * rot[0] + ny0 * rot[3] + nz0 * rot[6]
+            vertices[i * 6 + 4] = nx0 * rot[1] + ny0 * rot[4] + nz0 * rot[7]
+            vertices[i * 6 + 5] = nx0 * rot[2] + ny0 * rot[5] + nz0 * rot[8]
             if (x < minX) minX = x; if (x > maxX) maxX = x
             if (y < minY) minY = y; if (y > maxY) maxY = y
             if (z < minZ) minZ = z; if (z > maxZ) maxZ = z
@@ -109,12 +119,34 @@ object SceneBuilder {
             wire[o + 4] = c; wire[o + 5] = a
         }
 
-        val framePos = frameWorldPositions(frames)
+        val skin = g.skin
+        val boneMap = if (skin != null) BindPose.boneFrames(model, skin) else null
+        val framePos: FloatArray
         val lines = ArrayList<Float>()
-        for (f in frames) {
-            if (f.parent in frames.indices && f.parent != f.index) {
-                for (k in 0 until 3) lines.add(framePos[f.parent * 3 + k])
-                for (k in 0 until 3) lines.add(framePos[f.index * 3 + k])
+        if (skin != null && boneMap != null) {
+            // Pose bind dari Skin PLG: pas dengan mesh. / Bind pose: matches the mesh.
+            val bind = BindPose.bonePositions(skin)
+            framePos = FloatArray(skin.numBones * 3)
+            for (b in 0 until skin.numBones) atomic.point(bind[b * 3], bind[b * 3 + 1], bind[b * 3 + 2], framePos, b * 3)
+            val boneOfFrame = HashMap<Int, Int>()
+            for (b in boneMap.indices) if (boneMap[b] >= 0) boneOfFrame.putIfAbsent(boneMap[b], b)
+            for (b in boneMap.indices) {
+                if (boneMap[b] < 0) continue
+                var p = frames[boneMap[b]].parent
+                var guard = 0
+                while (p in frames.indices && p !in boneOfFrame && guard++ <= frames.size) p = frames[p].parent
+                val pb = boneOfFrame[p] ?: continue
+                if (pb == b) continue
+                for (k in 0 until 3) lines.add(framePos[pb * 3 + k])
+                for (k in 0 until 3) lines.add(framePos[b * 3 + k])
+            }
+        } else {
+            framePos = frameWorldPositions(frames)
+            for (f in frames) {
+                if (f.parent in frames.indices && f.parent != f.index) {
+                    for (k in 0 until 3) lines.add(framePos[f.parent * 3 + k])
+                    for (k in 0 until 3) lines.add(framePos[f.index * 3 + k])
+                }
             }
         }
 

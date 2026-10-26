@@ -129,7 +129,8 @@ class ByteReader(private val data: ByteArray, start: Int, val end: Int) {
             throw ParseFailure(
                 Issue(
                     Severity.ERROR, IssueCode.CHUNK_EXCEEDS_PARENT, headerStart,
-                    "type=$type size=${size.toLong() and 0xFFFFFFFFL} left=${end - pos}"
+                    "type=$type size=${size.toLong() and 0xFFFFFFFFL} left=${end - pos} header=" +
+                        "%08x %08x %08x".format(type, size, lib)
                 )
             )
         }

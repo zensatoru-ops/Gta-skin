@@ -34,6 +34,7 @@ class ValidationReport(
 
 object DffValidator {
 
+    private const val REST_POSE_TOLERANCE = 0.05f // usulan / proposal
     private const val WEIGHT_SUM_TOLERANCE = 1e-3f // usulan, aturan target UNKNOWN / proposal; target rule UNKNOWN
 
     fun validate(model: DffModel): ValidationReport {
@@ -166,6 +167,21 @@ object DffValidator {
         }
         if (s.unweightedVertices > 0) {
             issues.add(Issue(Severity.WARNING, IssueCode.SKIN_UNWEIGHTED_VERTICES, -1, "geometry=$gi vertices=${s.unweightedVertices}"))
+        }
+        val g = model.geometries.getOrNull(gi)
+        val skin = g?.skin
+        if (skin != null) {
+            val atomicFrame = model.atomics.firstOrNull()?.frame ?: -1
+            if (zen.gtasaskinstudio.app.scene.BindPose.boneFrames(model, skin) == null) {
+                issues.add(Issue(Severity.WARNING, IssueCode.SKIN_BONE_ORDER_UNKNOWN, -1, "geometry=$gi"))
+            } else {
+                val dev = zen.gtasaskinstudio.app.scene.BindPose.maxRestDeviation(
+                    model, skin, zen.gtasaskinstudio.app.scene.BindPose.frameWorld(model, atomicFrame)
+                )
+                if (dev > REST_POSE_TOLERANCE) {
+                    issues.add(Issue(Severity.INFO, IssueCode.SKIN_REST_POSE_DIFFERS, -1, "geometry=$gi maxDeviation=${"%.3f".format(dev)}"))
+                }
+            }
         }
         val hanimRoot = model.frames.firstOrNull { it.hanimNodeCount > 0 }
         if (hanimRoot != null && hanimRoot.hanimNodeCount != s.numBones) {

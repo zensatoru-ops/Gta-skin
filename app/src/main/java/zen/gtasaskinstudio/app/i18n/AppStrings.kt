@@ -108,6 +108,8 @@ enum class StrKey {
     IssueSkinWeightSum,
     IssueSkinUnweighted,
     IssueSkinBoneCount,
+    IssueSkinBoneOrder,
+    IssueSkinRestPose,
 }
 
 private val table: Map<StrKey, Pair<String, String>> = mapOf(
@@ -251,6 +253,14 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
         ),
     StrKey.IssueSkinUnweighted to (
         "Beberapa vertex tidak punya bobot skin." to "Some vertices have no skin weights."
+        ),
+    StrKey.IssueSkinBoneOrder to (
+        "Urutan bone HAnim tidak terbaca; skeleton digambar dari hierarki frame dan mungkin tidak pas dengan mesh." to
+            "HAnim bone order could not be read; the skeleton is drawn from the frame hierarchy and may not fit the mesh."
+        ),
+    StrKey.IssueSkinRestPose to (
+        "Pose istirahat frame berbeda dari pose bind skin. Viewer memakai pose bind agar tulang pas dengan mesh." to
+            "Frame rest pose differs from the skin bind pose. The viewer uses the bind pose so bones fit the mesh."
         ),
     StrKey.IssueSkinBoneCount to (
         "Jumlah bone skin berbeda dari hierarki HAnim." to "Skin bone count differs from the HAnim hierarchy."

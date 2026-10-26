@@ -73,7 +73,7 @@ class DffParserTest {
         val skin = s.model.geometries[0].skin
         assertNotNull(skin)
         assertEquals(1, skin!!.numBones)
-        assertTrue("unexpected: ${s.issues}", s.issues.none { it.code.name.startsWith("SKIN") })
+        assertTrue("unexpected: ${s.issues}", s.issues.none { it.code.name.startsWith("SKIN") && it.code != IssueCode.SKIN_BONE_ORDER_UNKNOWN }) // DFF sintetis tanpa HAnim
         val stats = s.skinStats[0]
         assertNotNull(stats)
         assertEquals(0, stats!!.badIndexVertices)
