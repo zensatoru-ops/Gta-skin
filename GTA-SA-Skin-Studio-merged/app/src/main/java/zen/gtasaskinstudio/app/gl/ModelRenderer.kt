@@ -1,0 +1,310 @@
+package zen.gtasaskinstudio.app.gl
+
+import android.graphics.Color
+import android.opengl.GLES20
+import android.opengl.GLSurfaceView
+import android.opengl.Matrix
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import java.nio.ShortBuffer
+import javax.microedition.khronos.egl.EGLConfig
+import javax.microedition.khronos.opengles.GL10
+import kotlin.math.cos
+import kotlin.math.sin
+import zen.gtasaskinstudio.app.scene.SceneBuffers
+
+/**
+ * Renderer OpenGL ES 2.0 untuk satu model. Data model dibangun di CPU oleh
+ * SceneBuilder; kelas ini hanya meng-upload dan menggambar. Tekstur belum
+ * didukung (Phase 7): material digambar polos atau dengan warna per-material.
+ *
+ * OpenGL ES 2.0 renderer for one model. Model data is built on the CPU by
+ * SceneBuilder; this class only uploads and draws. Textures are not
+ * supported yet (Phase 7): materials are drawn flat or color-coded.
+ */
+class ModelRenderer : GLSurfaceView.Renderer {
+
+    // Diatur dari thread UI, dibaca di thread GL. / Set on the UI thread, read on the GL thread.
+    @Volatile var scene: SceneBuffers? = null
+    @Volatile var wireframe = false
+    @Volatile var materialColors = true
+    @Volatile var showSkeleton = false
+    @Volatile var yaw = 25f
+    @Volatile var pitch = 10f
+    @Volatile var distanceFactor = 2.6f
+    @Volatile var panX = 0f
+    @Volatile var panY = 0f
+
+    private var litProgram = 0
+    private var flatProgram = 0
+
+    private var vertexBuf = 0
+    private var indexBuf = 0
+    private var wireBuf = 0
+    private var skelLineBuf = 0
+    private var skelPointBuf = 0
+    private var uploaded: SceneBuffers? = null
+    private var skelLineCount = 0
+    private var skelPointCount = 0
+
+    private val proj = FloatArray(16)
+    private val view = FloatArray(16)
+    private val pan = FloatArray(16)
+    private val viewPanned = FloatArray(16)
+    private val model = FloatArray(16)
+    private val viewModel = FloatArray(16)
+    private val mvp = FloatArray(16)
+    private var aspect = 1f
+
+    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        GLES20.glClearColor(0.07f, 0.08f, 0.13f, 1f)
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST)
+        litProgram = buildProgram(LIT_VERTEX, LIT_FRAGMENT)
+        flatProgram = buildProgram(FLAT_VERTEX, FLAT_FRAGMENT)
+        // Konteks GL baru: buffer lama tidak berlaku lagi. / New GL context: old buffers are gone.
+        uploaded = null
+        vertexBuf = 0; indexBuf = 0; wireBuf = 0; skelLineBuf = 0; skelPointBuf = 0
+    }
+
+    override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        GLES20.glViewport(0, 0, width, height)
+        aspect = if (height == 0) 1f else width.toFloat() / height
+    }
+
+    override fun onDrawFrame(gl: GL10?) {
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+        val s = scene ?: return
+        if (uploaded !== s) upload(s)
+
+        val r = s.radius
+        val d = distanceFactor * r
+        val p = Math.toRadians(pitch.toDouble())
+        val y = Math.toRadians(yaw.toDouble())
+        val ex = (d * cos(p) * sin(y)).toFloat()
+        val ey = (d * sin(p)).toFloat()
+        val ez = (d * cos(p) * cos(y)).toFloat()
+
+        Matrix.perspectiveM(proj, 0, 45f, aspect, r * 0.05f, r * 60f)
+        Matrix.setLookAtM(view, 0, ex, ey, ez, 0f, 0f, 0f, 0f, 1f, 0f)
+        Matrix.setIdentityM(pan, 0)
+        Matrix.translateM(pan, 0, panX * r, panY * r, 0f)
+        Matrix.multiplyMM(viewPanned, 0, pan, 0, view, 0)
+
+        // GTA memakai sumbu Z ke atas; GL kita Y ke atas. / GTA is Z-up; our GL view is Y-up.
+        Matrix.setIdentityM(model, 0)
+        Matrix.rotateM(model, 0, -90f, 1f, 0f, 0f)
+        Matrix.translateM(model, 0, -s.center[0], -s.center[1], -s.center[2])
+        Matrix.multiplyMM(viewModel, 0, viewPanned, 0, model, 0)
+        Matrix.multiplyMM(mvp, 0, proj, 0, viewModel, 0)
+
+        if (wireframe) {
+            drawSolid(s, flatShade = true)
+            drawWire(s)
+        } else {
+            drawSolid(s, flatShade = false)
+        }
+        if (showSkeleton) drawSkeleton()
+    }
+
+    private fun drawSolid(s: SceneBuffers, flatShade: Boolean) {
+        GLES20.glUseProgram(litProgram)
+        val aPos = GLES20.glGetAttribLocation(litProgram, "aPos")
+        val aNormal = GLES20.glGetAttribLocation(litProgram, "aNormal")
+        val uMvp = GLES20.glGetUniformLocation(litProgram, "uMvp")
+        val uNormal = GLES20.glGetUniformLocation(litProgram, "uNormalMat")
+        val uColor = GLES20.glGetUniformLocation(litProgram, "uColor")
+
+        GLES20.glUniformMatrix4fv(uMvp, 1, false, mvp, 0)
+        GLES20.glUniformMatrix4fv(uNormal, 1, false, viewModel, 0)
+
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBuf)
+        GLES20.glEnableVertexAttribArray(aPos)
+        GLES20.glVertexAttribPointer(aPos, 3, GLES20.GL_FLOAT, false, 24, 0)
+        GLES20.glEnableVertexAttribArray(aNormal)
+        GLES20.glVertexAttribPointer(aNormal, 3, GLES20.GL_FLOAT, false, 24, 12)
+        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexBuf)
+
+        if (flatShade) {
+            // Lapisan gelap di bawah garis wireframe, digeser sedikit agar tidak z-fighting.
+            GLES20.glEnable(GLES20.GL_POLYGON_OFFSET_FILL)
+            GLES20.glPolygonOffset(1f, 1f)
+        }
+        for (draw in s.draws) {
+            val c = if (flatShade) DARK else if (materialColors) paletteColor(draw.materialIndex) else NEUTRAL
+            GLES20.glUniform4f(uColor, c[0], c[1], c[2], 1f)
+            GLES20.glDrawElements(GLES20.GL_TRIANGLES, draw.count, GLES20.GL_UNSIGNED_SHORT, draw.start * 2)
+        }
+        if (flatShade) GLES20.glDisable(GLES20.GL_POLYGON_OFFSET_FILL)
+
+        GLES20.glDisableVertexAttribArray(aPos)
+        GLES20.glDisableVertexAttribArray(aNormal)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
+        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
+    }
+
+    private fun drawWire(s: SceneBuffers) {
+        GLES20.glUseProgram(flatProgram)
+        val aPos = GLES20.glGetAttribLocation(flatProgram, "aPos")
+        val uMvp = GLES20.glGetUniformLocation(flatProgram, "uMvp")
+        val uColor = GLES20.glGetUniformLocation(flatProgram, "uColor")
+        GLES20.glUniformMatrix4fv(uMvp, 1, false, mvp, 0)
+        GLES20.glUniform4f(uColor, 0.75f, 0.88f, 1f, 1f)
+
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBuf)
+        GLES20.glEnableVertexAttribArray(aPos)
+        GLES20.glVertexAttribPointer(aPos, 3, GLES20.GL_FLOAT, false, 24, 0)
+        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, wireBuf)
+        GLES20.glDrawElements(GLES20.GL_LINES, s.wireIndices.size, GLES20.GL_UNSIGNED_SHORT, 0)
+        GLES20.glDisableVertexAttribArray(aPos)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
+        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
+    }
+
+    private fun drawSkeleton() {
+        if (skelLineCount == 0 && skelPointCount == 0) return
+        GLES20.glDisable(GLES20.GL_DEPTH_TEST)
+        GLES20.glUseProgram(flatProgram)
+        val aPos = GLES20.glGetAttribLocation(flatProgram, "aPos")
+        val uMvp = GLES20.glGetUniformLocation(flatProgram, "uMvp")
+        val uColor = GLES20.glGetUniformLocation(flatProgram, "uColor")
+        GLES20.glUniformMatrix4fv(uMvp, 1, false, mvp, 0)
+        GLES20.glUniform4f(uColor, 0.91f, 0.71f, 0.30f, 1f)
+        GLES20.glEnableVertexAttribArray(aPos)
+
+        if (skelLineCount > 0) {
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, skelLineBuf)
+            GLES20.glVertexAttribPointer(aPos, 3, GLES20.GL_FLOAT, false, 12, 0)
+            GLES20.glLineWidth(3f)
+            GLES20.glDrawArrays(GLES20.GL_LINES, 0, skelLineCount)
+        }
+        if (skelPointCount > 0) {
+            GLES20.glUniform4f(uColor, 1f, 0.95f, 0.6f, 1f)
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, skelPointBuf)
+            GLES20.glVertexAttribPointer(aPos, 3, GLES20.GL_FLOAT, false, 12, 0)
+            GLES20.glDrawArrays(GLES20.GL_POINTS, 0, skelPointCount)
+        }
+        GLES20.glDisableVertexAttribArray(aPos)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST)
+    }
+
+    // ------------------------------------------------------------- upload
+
+    private fun upload(s: SceneBuffers) {
+        val ids = IntArray(5)
+        val old = intArrayOf(vertexBuf, indexBuf, wireBuf, skelLineBuf, skelPointBuf).filter { it != 0 }.toIntArray()
+        if (old.isNotEmpty()) GLES20.glDeleteBuffers(old.size, old, 0)
+
+        GLES20.glGenBuffers(5, ids, 0)
+        vertexBuf = ids[0]; indexBuf = ids[1]; wireBuf = ids[2]; skelLineBuf = ids[3]; skelPointBuf = ids[4]
+
+        bufferFloats(vertexBuf, s.vertices)
+        bufferShorts(indexBuf, s.indices)
+        bufferShorts(wireBuf, s.wireIndices)
+        bufferFloats(skelLineBuf, s.skeletonLines)
+        bufferFloats(skelPointBuf, s.framePositions)
+        skelLineCount = s.skeletonLines.size / 3
+        skelPointCount = s.framePositions.size / 3
+        uploaded = s
+    }
+
+    private fun bufferFloats(id: Int, data: FloatArray) {
+        val fb: FloatBuffer = ByteBuffer.allocateDirect(data.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+        fb.put(data).position(0)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, id)
+        GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, data.size * 4, fb, GLES20.GL_STATIC_DRAW)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
+    }
+
+    private fun bufferShorts(id: Int, data: ShortArray) {
+        val sb: ShortBuffer = ByteBuffer.allocateDirect(data.size * 2).order(ByteOrder.nativeOrder()).asShortBuffer()
+        sb.put(data).position(0)
+        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, id)
+        GLES20.glBufferData(GLES20.GL_ELEMENT_ARRAY_BUFFER, data.size * 2, sb, GLES20.GL_STATIC_DRAW)
+        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
+    }
+
+    // ------------------------------------------------------------ shaders
+
+    private fun buildProgram(vs: String, fs: String): Int {
+        val v = compile(GLES20.GL_VERTEX_SHADER, vs)
+        val f = compile(GLES20.GL_FRAGMENT_SHADER, fs)
+        val program = GLES20.glCreateProgram()
+        GLES20.glAttachShader(program, v)
+        GLES20.glAttachShader(program, f)
+        GLES20.glLinkProgram(program)
+        val status = IntArray(1)
+        GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, status, 0)
+        if (status[0] == 0) {
+            val log = GLES20.glGetProgramInfoLog(program)
+            GLES20.glDeleteProgram(program)
+            throw IllegalStateException("GL link failed: $log")
+        }
+        return program
+    }
+
+    private fun compile(type: Int, src: String): Int {
+        val shader = GLES20.glCreateShader(type)
+        GLES20.glShaderSource(shader, src)
+        GLES20.glCompileShader(shader)
+        val status = IntArray(1)
+        GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, status, 0)
+        if (status[0] == 0) {
+            val log = GLES20.glGetShaderInfoLog(shader)
+            GLES20.glDeleteShader(shader)
+            throw IllegalStateException("GL shader compile failed: $log")
+        }
+        return shader
+    }
+
+    companion object {
+        private val NEUTRAL = floatArrayOf(0.78f, 0.78f, 0.82f)
+        private val DARK = floatArrayOf(0.10f, 0.11f, 0.17f)
+
+        /** Warna deterministik per indeks material (sudut emas pada hue). */
+        fun paletteColor(index: Int): FloatArray {
+            val hue = (index * 137.508f) % 360f
+            val rgb = Color.HSVToColor(floatArrayOf(hue, 0.55f, 0.92f))
+            return floatArrayOf(Color.red(rgb) / 255f, Color.green(rgb) / 255f, Color.blue(rgb) / 255f)
+        }
+
+        private const val LIT_VERTEX = """
+            uniform mat4 uMvp;
+            uniform mat4 uNormalMat;
+            attribute vec3 aPos;
+            attribute vec3 aNormal;
+            varying vec3 vNormal;
+            void main() {
+                vNormal = (uNormalMat * vec4(aNormal, 0.0)).xyz;
+                gl_Position = uMvp * vec4(aPos, 1.0);
+            }
+        """
+        private const val LIT_FRAGMENT = """
+            precision mediump float;
+            uniform vec4 uColor;
+            varying vec3 vNormal;
+            void main() {
+                vec3 n = normalize(vNormal);
+                vec3 light = normalize(vec3(0.3, 0.5, 0.8));
+                float d = abs(dot(n, light));
+                gl_FragColor = vec4(uColor.rgb * (0.30 + 0.70 * d), uColor.a);
+            }
+        """
+        private const val FLAT_VERTEX = """
+            uniform mat4 uMvp;
+            attribute vec3 aPos;
+            void main() {
+                gl_Position = uMvp * vec4(aPos, 1.0);
+                gl_PointSize = 9.0;
+            }
+        """
+        private const val FLAT_FRAGMENT = """
+            precision mediump float;
+            uniform vec4 uColor;
+            void main() {
+                gl_FragColor = uColor;
+            }
+        """
+    }
+}

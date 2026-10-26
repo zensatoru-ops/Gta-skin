@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_navy">#1B1F3B</color>
+    <color name="brand_gold">#E8B64C</color>
+    <color name="error_red">#C0392B</color>
+    <color name="surface_dark">#121420</color>
+</resources>

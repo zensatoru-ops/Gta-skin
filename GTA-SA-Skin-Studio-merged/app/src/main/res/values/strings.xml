@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Label aplikasi di launcher Android — dipakai sistem, terpisah dari
+         teks dalam aplikasi yang diatur lewat AppStrings.kt agar bisa
+         diganti bahasa saat runtime tanpa bergantung pada locale sistem. -->
+    <string name="app_name">GTA SA Skin Studio</string>
+</resources>
