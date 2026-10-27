@@ -33,6 +33,7 @@ fun ObjViewerScreen(
     vertexCount: Int,
     triangleCount: Int,
     mtlName: String?,
+    showMtl: Boolean,
     onPickMtl: () -> Unit,
     textures: List<TxdTexture>,
     txdLabel: String?,
@@ -40,16 +41,22 @@ fun ObjViewerScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
+        val summary = lang.fmt(StrKey.ObjSummary, vertexCount, triangleCount)
         Text(
-            text = lang.fmt(StrKey.ObjSummary, vertexCount, triangleCount) + "\n" +
-                (mtlName?.let { "${lang.str(StrKey.MtlLoaded)} $it" } ?: lang.str(StrKey.MtlNone)),
+            text = if (showMtl) {
+                summary + "\n" + (mtlName?.let { "${lang.str(StrKey.MtlLoaded)} $it" } ?: lang.str(StrKey.MtlNone))
+            } else {
+                summary
+            },
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        OutlinedButton(
-            onClick = onPickMtl,
-            modifier = Modifier.padding(horizontal = 8.dp),
-        ) { Text(lang.str(StrKey.OpenMtl)) }
+        if (showMtl) {
+            OutlinedButton(
+                onClick = onPickMtl,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) { Text(lang.str(StrKey.OpenMtl)) }
+        }
         ModelTab(
             lang = lang,
             scene = scene,

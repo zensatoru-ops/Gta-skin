@@ -39,6 +39,7 @@ fun IssueCode.strKey(): StrKey = when (this) {
     IssueCode.OBJ_FACE_INVALID -> StrKey.IssueObjFace
     IssueCode.OBJ_ATTRIBUTE_PARTIAL -> StrKey.IssueObjAttributePartial
     IssueCode.OBJ_DIRECTIVE_IGNORED -> StrKey.IssueObjDirectiveIgnored
+    IssueCode.FBX_PARTIAL -> StrKey.IssueFbxPartial
 }
 
 fun Severity.strKey(): StrKey = when (this) {

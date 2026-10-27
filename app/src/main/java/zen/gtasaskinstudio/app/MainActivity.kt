@@ -55,6 +55,7 @@ import zen.gtasaskinstudio.app.saf.SafFileInfo
 import zen.gtasaskinstudio.app.saf.SafReadResult
 import zen.gtasaskinstudio.app.saf.readSafBytes
 import zen.gtasaskinstudio.app.saf.readSafFileInfo
+import zen.gtasaskinstudio.app.fbx.FbxLoader
 import zen.gtasaskinstudio.app.obj.ObjLoadOutcome
 import zen.gtasaskinstudio.app.obj.ObjLoader
 import zen.gtasaskinstudio.app.scene.LoadOutcome
@@ -79,7 +80,7 @@ private sealed class ScreenState {
     data object Idle : ScreenState()
     data class Loading(val info: SafFileInfo) : ScreenState()
     data class Loaded(val value: LoadedModel) : ScreenState()
-    data class ObjLoaded(val value: ObjLoadOutcome.Loaded, val objBytes: ByteArray) : ScreenState()
+    data class ObjLoaded(val value: ObjLoadOutcome.Loaded, val objBytes: ByteArray, val isObj: Boolean) : ScreenState()
     data class Failed(val info: SafFileInfo, val issues: List<Issue>) : ScreenState()
     data class NotDff(val info: SafFileInfo) : ScreenState()
     data class Error(val reason: SafFailureReason) : ScreenState()
@@ -147,15 +148,15 @@ private fun loadMtlBytes(context: android.content.Context, uri: Uri): Pair<Strin
 }
 
 /** Baca byte OBJ, parse, dan bangun scene di thread latar. / Read, parse and build an OBJ scene off the main thread. */
-private fun loadObjFile(context: android.content.Context, info: SafFileInfo): ScreenState {
+private fun loadObjFile(context: android.content.Context, info: SafFileInfo, isFbx: Boolean): ScreenState {
     return when (val bytes = readSafBytes(context, info.uri, info.sizeBytes, Limits.MAX_FILE_BYTES)) {
         is SafBytesResult.TooLarge -> ScreenState.Failed(
             info,
             listOf(Issue(Severity.ERROR, IssueCode.FILE_TOO_LARGE, -1, "max ${Limits.MAX_FILE_BYTES / (1024 * 1024)} MB")),
         )
         is SafBytesResult.Failure -> ScreenState.Error(SafFailureReason.CANNOT_READ)
-        is SafBytesResult.Success -> when (val o = ObjLoader.load(info.displayName, info.sizeBytes, bytes.bytes)) {
-            is ObjLoadOutcome.Loaded -> ScreenState.ObjLoaded(o, bytes.bytes)
+        is SafBytesResult.Success -> when (val o = if (isFbx) FbxLoader.load(info.displayName, info.sizeBytes, bytes.bytes) else ObjLoader.load(info.displayName, info.sizeBytes, bytes.bytes)) {
+            is ObjLoadOutcome.Loaded -> ScreenState.ObjLoaded(o, bytes.bytes, isObj = !isFbx)
             is ObjLoadOutcome.Failed -> ScreenState.Failed(info, o.issues)
         }
     }
@@ -179,13 +180,14 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 val name = (info.displayName ?: "").lowercase()
                 val isDff = name.endsWith(".dff")
                 val isObj = name.endsWith(".obj")
-                if (!isDff && !isObj) {
+                val isFbx = name.endsWith(".fbx")
+                if (!isDff && !isObj && !isFbx) {
                     state = ScreenState.NotDff(info)
                 } else {
                     state = ScreenState.Loading(info)
                     scope.launch {
                         val next = withContext(Dispatchers.Default) {
-                            if (isDff) loadFile(context, info) else loadObjFile(context, info)
+                            if (isDff) loadFile(context, info) else loadObjFile(context, info, isFbx)
                         }
                         state = next
                     }
@@ -215,6 +217,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         val current = state as? ScreenState.ObjLoaded ?: return@rememberLauncherForActivityResult
+        if (!current.isObj) return@rememberLauncherForActivityResult
         scope.launch {
             val mtl = withContext(Dispatchers.Default) { loadMtlBytes(context, uri) } ?: return@launch
             val o = withContext(Dispatchers.Default) {
@@ -226,7 +229,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 )
             }
             if (o is ObjLoadOutcome.Loaded) {
-                state = ScreenState.ObjLoaded(o, current.objBytes)
+                state = ScreenState.ObjLoaded(o, current.objBytes, isObj = true)
                 mtlName = mtl.first
             }
         }
@@ -303,6 +306,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                     vertexCount = current.value.vertexCount,
                     triangleCount = current.value.triangleCount,
                     mtlName = mtlName,
+                    showMtl = current.isObj,
                     onPickMtl = { mtlLauncher.launch(SUPPORTED_MIME_TYPES) },
                     textures = textures,
                     txdLabel = txdLabel,

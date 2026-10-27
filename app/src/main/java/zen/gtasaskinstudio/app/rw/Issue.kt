@@ -44,6 +44,7 @@ enum class IssueCode {
     OBJ_FACE_INVALID,
     OBJ_ATTRIBUTE_PARTIAL,
     OBJ_DIRECTIVE_IGNORED,
+    FBX_PARTIAL,
 }
 
 data class Issue(

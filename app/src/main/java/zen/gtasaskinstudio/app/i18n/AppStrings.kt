@@ -127,6 +127,7 @@ enum class StrKey {
     OpenMtl,
     MtlNone,
     MtlLoaded,
+    IssueFbxPartial,
 }
 
 private val table: Map<StrKey, Pair<String, String>> = mapOf(
@@ -162,6 +163,10 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
     StrKey.FileTooLarge to (
         "Berkas terlalu besar (maksimal %d MB)." to "File is too large (maximum %d MB)."
         ),
+    StrKey.IssueFbxPartial to (
+        "Belum diterapkan pada FBX ini; mesh diimpor apa adanya." to
+            "Not applied to this FBX yet; the mesh is imported as-is."
+        ),
     StrKey.OpenMtl to (
         "Buka MTL" to "Open MTL"
         ),
@@ -176,8 +181,8 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
         "%d vertex · %d segitiga" to "%d vertices · %d triangles"
         ),
     StrKey.OnlyDffNow to (
-        "Format yang dibaca saat ini: .dff dan .obj. TXD dibuka dari viewer." to
-            "Currently supported: .dff and .obj. Open TXD from the viewer."
+        "Format yang dibaca saat ini: .dff, .obj, dan .fbx. TXD dibuka dari viewer." to
+            "Currently supported: .dff, .obj and .fbx. Open TXD from the viewer."
         ),
     StrKey.TabModel to ("Model" to "Model"),
     StrKey.TabInfo to ("Info" to "Info"),
