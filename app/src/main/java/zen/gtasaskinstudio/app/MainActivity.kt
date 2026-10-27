@@ -1,7 +1,10 @@
 package zen.gtasaskinstudio.app
 
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -48,6 +51,8 @@ import zen.gtasaskinstudio.app.rw.Severity
 import zen.gtasaskinstudio.app.rw.TxdParseResult
 import zen.gtasaskinstudio.app.rw.TxdParser
 import zen.gtasaskinstudio.app.rw.TxdTexture
+import zen.gtasaskinstudio.app.saf.AutoTextureResult
+import zen.gtasaskinstudio.app.saf.AutoTextures
 import zen.gtasaskinstudio.app.saf.SUPPORTED_MIME_TYPES
 import zen.gtasaskinstudio.app.saf.SafBytesResult
 import zen.gtasaskinstudio.app.saf.SafFailureReason
@@ -59,6 +64,7 @@ import zen.gtasaskinstudio.app.fbx.FbxLoader
 import zen.gtasaskinstudio.app.obj.ObjLoadOutcome
 import zen.gtasaskinstudio.app.obj.ObjLoader
 import zen.gtasaskinstudio.app.scene.LoadOutcome
+import zen.gtasaskinstudio.app.scene.SceneBuffers
 import zen.gtasaskinstudio.app.scene.LoadedModel
 import zen.gtasaskinstudio.app.scene.ModelLoader
 import zen.gtasaskinstudio.app.ui.IssuesList
@@ -169,6 +175,20 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf<ScreenState>(ScreenState.Idle) }
 
+    // PNG otomatis: dicari di folder yang sama dengan berkas model, memakai nama material.
+    // Auto PNG: searched in the model file's folder, matched by material names.
+    var modelUri by remember { mutableStateOf<Uri?>(null) }
+    var autoResult by remember { mutableStateOf<AutoTextureResult?>(null) }
+    suspend fun autoSearch(uri: Uri, s: ScreenState) {
+        val scene: SceneBuffers = when (s) {
+            is ScreenState.Loaded -> s.value.scene
+            is ScreenState.ObjLoaded -> s.value.scene
+            else -> null
+        } ?: return
+        val names = scene.materialNames.filterNotNull().distinct()
+        autoResult = withContext(Dispatchers.Default) { AutoTextures.find(context, uri, names) }
+    }
+
     val openDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -185,11 +205,14 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                     state = ScreenState.NotDff(info)
                 } else {
                     state = ScreenState.Loading(info)
+                    autoResult = null
+                    modelUri = info.uri
                     scope.launch {
                         val next = withContext(Dispatchers.Default) {
                             if (isDff) loadFile(context, info) else loadObjFile(context, info, isFbx)
                         }
                         state = next
+                        autoSearch(info.uri, next)
                     }
                 }
             }
@@ -239,6 +262,11 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
         if (txdSkipped > 0) "$base · $txdSkipped ${lang.str(StrKey.TxdSkipped)}" else base
     }
 
+    // TXD menang bila nama sama; PNG otomatis mengisi sisanya.
+    // TXD wins on equal names; auto PNGs fill the rest.
+    val autoTextures = autoResult?.textures.orEmpty()
+    val allTextures = textures + autoTextures.filter { a -> textures.none { it.name.equals(a.name, ignoreCase = true) } }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -274,6 +302,19 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 if (name != null) Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
             }
 
+            val autoInfo = autoResult
+            if (autoInfo != null && (current is ScreenState.Loaded || current is ScreenState.ObjLoaded)) {
+                AutoPngStatus(
+                    lang = lang,
+                    result = autoInfo,
+                    onGrant = { openStorageSettings(context) },
+                    onRecheck = {
+                        val u = modelUri
+                        if (u != null) scope.launch { autoSearch(u, current) }
+                    },
+                )
+            }
+
             when (current) {
                 is ScreenState.Idle -> Column(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -294,7 +335,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 is ScreenState.Loaded -> ModelViewerScreen(
                     lang = lang,
                     loaded = current.value,
-                    textures = textures,
+                    textures = allTextures,
                     txdLabel = txdLabel,
                     onPickTxd = { txdLauncher.launch(SUPPORTED_MIME_TYPES) },
                     modifier = Modifier.fillMaxSize(),
@@ -308,7 +349,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                     mtlName = mtlName,
                     showMtl = current.isObj,
                     onPickMtl = { mtlLauncher.launch(SUPPORTED_MIME_TYPES) },
-                    textures = textures,
+                    textures = allTextures,
                     txdLabel = txdLabel,
                     onPickTxd = { txdLauncher.launch(SUPPORTED_MIME_TYPES) },
                     modifier = Modifier.fillMaxSize(),
@@ -331,6 +372,48 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                     ErrorCard(lang = lang, reason = current.reason, onRetry = pick)
                 }
             }
+        }
+    }
+}
+
+/** Buka layar izin penyimpanan aplikasi. / Open this app's storage permission screen. */
+private fun openStorageSettings(context: android.content.Context) {
+    val uri = Uri.parse("package:${context.packageName}")
+    val intent = if (Build.VERSION.SDK_INT >= 30) {
+        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri)
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri)
+    }
+    context.startActivity(intent)
+}
+
+@Composable
+private fun AutoPngStatus(
+    lang: Lang,
+    result: AutoTextureResult,
+    onGrant: () -> Unit,
+    onRecheck: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        when {
+            result.needsPermission -> {
+                Text(lang.str(StrKey.AutoPngNeedPermission), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onGrant) { Text(lang.str(StrKey.AutoPngGrant)) }
+                    OutlinedButton(onClick = onRecheck) { Text(lang.str(StrKey.AutoPngRecheck)) }
+                }
+            }
+            result.noPath -> Text(lang.str(StrKey.AutoPngNoPath), style = MaterialTheme.typography.bodySmall)
+            result.textures.isEmpty() -> Text(lang.str(StrKey.AutoPngNone), style = MaterialTheme.typography.bodySmall)
+            else -> Text(
+                "${lang.str(StrKey.AutoPngLoaded)} ${result.textures.size} PNG: " +
+                    result.textures.joinToString { it.name },
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+            )
         }
     }
 }

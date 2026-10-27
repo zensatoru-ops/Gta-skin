@@ -156,7 +156,7 @@ object FbxImporter {
             uvs = uvs,
             triangles = tris,
             triMaterial = triMat,
-            materials = (if (matList.isEmpty()) listOf("default") else matList).map { InternalMaterial(it, null) },
+            materials = (if (matList.isEmpty()) listOf("default") else matList).map { InternalMaterial(it, it) },
         )
         return FbxParseResult.Success(mesh, issues)
     }

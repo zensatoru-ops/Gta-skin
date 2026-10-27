@@ -58,6 +58,12 @@ enum class StrKey {
     TxdLoaded,
     TxdTextures,
     TxdSkipped,
+    AutoPngLoaded,
+    AutoPngNone,
+    AutoPngNeedPermission,
+    AutoPngNoPath,
+    AutoPngGrant,
+    AutoPngRecheck,
     CannotRender,
     ParseFailedTitle,
     InfoRw,
@@ -205,6 +211,21 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
     StrKey.TxdLoaded to ("TXD dimuat:" to "TXD loaded:"),
     StrKey.TxdTextures to ("tekstur" to "textures"),
     StrKey.TxdSkipped to ("dilewati" to "skipped"),
+    StrKey.AutoPngLoaded to ("PNG otomatis dari folder:" to "Auto PNG from folder:"),
+    StrKey.AutoPngNone to (
+        "Tidak ada PNG dengan nama material di folder berkas ini." to
+            "No PNG matching the material names in this file's folder."
+        ),
+    StrKey.AutoPngNeedPermission to (
+        "Izinkan \"Akses semua file\" agar PNG di folder model dimuat otomatis." to
+            "Allow \"All files access\" so PNGs in the model folder load automatically."
+        ),
+    StrKey.AutoPngNoPath to (
+        "Folder berkas ini tidak bisa dibaca dari sumber ini." to
+            "This file's folder cannot be read from this source."
+        ),
+    StrKey.AutoPngGrant to ("Buka pengaturan izin" to "Open permission settings"),
+    StrKey.AutoPngRecheck to ("Cek ulang" to "Recheck"),
     StrKey.CannotRender to (
         "Model tidak digambar karena validasi menemukan kesalahan. Lihat tab Catatan." to
             "The model is not drawn because validation found errors. See the Issues tab."
