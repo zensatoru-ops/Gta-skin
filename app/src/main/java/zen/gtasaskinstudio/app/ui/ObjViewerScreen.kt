@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -31,6 +32,8 @@ fun ObjViewerScreen(
     issues: List<Issue>,
     vertexCount: Int,
     triangleCount: Int,
+    mtlName: String?,
+    onPickMtl: () -> Unit,
     textures: List<TxdTexture>,
     txdLabel: String?,
     onPickTxd: () -> Unit,
@@ -38,10 +41,15 @@ fun ObjViewerScreen(
 ) {
     Column(modifier = modifier) {
         Text(
-            text = lang.fmt(StrKey.ObjSummary, vertexCount, triangleCount),
+            text = lang.fmt(StrKey.ObjSummary, vertexCount, triangleCount) + "\n" +
+                (mtlName?.let { "${lang.str(StrKey.MtlLoaded)} $it" } ?: lang.str(StrKey.MtlNone)),
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
+        OutlinedButton(
+            onClick = onPickMtl,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        ) { Text(lang.str(StrKey.OpenMtl)) }
         ModelTab(
             lang = lang,
             scene = scene,

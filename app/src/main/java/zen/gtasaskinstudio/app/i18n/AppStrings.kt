@@ -124,6 +124,9 @@ enum class StrKey {
     IssueObjAttributePartial,
     IssueObjDirectiveIgnored,
     ObjSummary,
+    OpenMtl,
+    MtlNone,
+    MtlLoaded,
 }
 
 private val table: Map<StrKey, Pair<String, String>> = mapOf(
@@ -158,6 +161,16 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
     StrKey.Parsing to ("Membaca dan memeriksa berkas…" to "Reading and validating the file…"),
     StrKey.FileTooLarge to (
         "Berkas terlalu besar (maksimal %d MB)." to "File is too large (maximum %d MB)."
+        ),
+    StrKey.OpenMtl to (
+        "Buka MTL" to "Open MTL"
+        ),
+    StrKey.MtlNone to (
+        "Belum ada MTL: tekstur memakai nama material." to
+            "No MTL yet: textures use the material names."
+        ),
+    StrKey.MtlLoaded to (
+        "MTL dimuat:" to "MTL loaded:"
         ),
     StrKey.ObjSummary to (
         "%d vertex · %d segitiga" to "%d vertices · %d triangles"

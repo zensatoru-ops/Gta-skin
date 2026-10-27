@@ -30,4 +30,17 @@ class ObjLoaderTest {
         assertTrue(l.issues.isNotEmpty())
         assertEquals(1, l.triangleCount)
     }
+
+    @Test fun mtlRemapsTextureNamesAndFallsBackToMaterialName() {
+        val obj = "mtllib a.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl skin\nf 1 2 3\nusemtl hair\nf 1 3 2\n"
+        val mtl = "newmtl skin\nmap_Kd Alan74.bmp\n"
+        val l = ObjLoader.load("a.obj", null, obj.toByteArray(Charsets.ISO_8859_1), mtl.toByteArray(Charsets.ISO_8859_1)) as ObjLoadOutcome.Loaded
+        assertEquals(listOf<String?>("Alan74", "hair"), l.scene.materialNames)
+    }
+
+    @Test fun withoutMtlMaterialNameIsTextureName() {
+        val obj = "usemtl Alice_hair\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"
+        val l = ObjLoader.load(null, null, obj.toByteArray(Charsets.ISO_8859_1)) as ObjLoadOutcome.Loaded
+        assertEquals(listOf<String?>("Alice_hair"), l.scene.materialNames)
+    }
 }

@@ -79,7 +79,7 @@ private sealed class ScreenState {
     data object Idle : ScreenState()
     data class Loading(val info: SafFileInfo) : ScreenState()
     data class Loaded(val value: LoadedModel) : ScreenState()
-    data class ObjLoaded(val value: ObjLoadOutcome.Loaded) : ScreenState()
+    data class ObjLoaded(val value: ObjLoadOutcome.Loaded, val objBytes: ByteArray) : ScreenState()
     data class Failed(val info: SafFileInfo, val issues: List<Issue>) : ScreenState()
     data class NotDff(val info: SafFileInfo) : ScreenState()
     data class Error(val reason: SafFailureReason) : ScreenState()
@@ -138,6 +138,14 @@ private fun loadFile(context: android.content.Context, info: SafFileInfo): Scree
     }
 }
 
+/** Baca berkas .mtl di thread latar; null bila gagal. / Read a .mtl file off the main thread; null on failure. */
+private fun loadMtlBytes(context: android.content.Context, uri: Uri): Pair<String?, ByteArray>? {
+    val info = (readSafFileInfo(context, uri) as? SafReadResult.Success)?.info ?: return null
+    val bytes = readSafBytes(context, info.uri, info.sizeBytes, Limits.MAX_FILE_BYTES) as? SafBytesResult.Success
+        ?: return null
+    return info.displayName to bytes.bytes
+}
+
 /** Baca byte OBJ, parse, dan bangun scene di thread latar. / Read, parse and build an OBJ scene off the main thread. */
 private fun loadObjFile(context: android.content.Context, info: SafFileInfo): ScreenState {
     return when (val bytes = readSafBytes(context, info.uri, info.sizeBytes, Limits.MAX_FILE_BYTES)) {
@@ -147,7 +155,7 @@ private fun loadObjFile(context: android.content.Context, info: SafFileInfo): Sc
         )
         is SafBytesResult.Failure -> ScreenState.Error(SafFailureReason.CANNOT_READ)
         is SafBytesResult.Success -> when (val o = ObjLoader.load(info.displayName, info.sizeBytes, bytes.bytes)) {
-            is ObjLoadOutcome.Loaded -> ScreenState.ObjLoaded(o)
+            is ObjLoadOutcome.Loaded -> ScreenState.ObjLoaded(o, bytes.bytes)
             is ObjLoadOutcome.Failed -> ScreenState.Failed(info, o.issues)
         }
     }
@@ -199,6 +207,28 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
             textures = loaded.textures
             txdName = loaded.name
             txdSkipped = loaded.skipped
+        }
+    }
+    var mtlName by remember { mutableStateOf<String?>(null) }
+    val mtlLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val current = state as? ScreenState.ObjLoaded ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val mtl = withContext(Dispatchers.Default) { loadMtlBytes(context, uri) } ?: return@launch
+            val o = withContext(Dispatchers.Default) {
+                ObjLoader.load(
+                    current.value.displayName,
+                    current.value.sizeBytes,
+                    current.objBytes,
+                    mtl.second,
+                )
+            }
+            if (o is ObjLoadOutcome.Loaded) {
+                state = ScreenState.ObjLoaded(o, current.objBytes)
+                mtlName = mtl.first
+            }
         }
     }
     val txdLabel = txdName?.let {
@@ -272,6 +302,8 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                     issues = current.value.issues,
                     vertexCount = current.value.vertexCount,
                     triangleCount = current.value.triangleCount,
+                    mtlName = mtlName,
+                    onPickMtl = { mtlLauncher.launch(SUPPORTED_MIME_TYPES) },
                     textures = textures,
                     txdLabel = txdLabel,
                     onPickTxd = { txdLauncher.launch(SUPPORTED_MIME_TYPES) },
