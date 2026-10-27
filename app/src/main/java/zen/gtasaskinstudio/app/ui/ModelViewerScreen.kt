@@ -92,6 +92,10 @@ internal fun ModelTab(
     txdLabel: String?,
     onPickTxd: () -> Unit,
     modifier: Modifier,
+    /** Bila tidak null, tombol "Buka MTL" tampil di baris tombol. / When non-null, an "Open MTL" button is shown. */
+    onPickMtl: (() -> Unit)? = null,
+    /** Teks tambahan di bawah viewer (mis. status MTL). / Extra footer text (e.g. MTL status). */
+    extraFooter: String? = null,
 ) {
     var wire by rememberSaveable { mutableStateOf(false) }
     var colors by rememberSaveable { mutableStateOf(true) }
@@ -146,12 +150,18 @@ internal fun ModelTab(
                 OutlinedButton(onClick = onPickTxd, modifier = Modifier.weight(1f)) {
                     Text(lang.str(StrKey.OpenTxd))
                 }
+                if (onPickMtl != null) {
+                    OutlinedButton(onClick = onPickMtl, modifier = Modifier.weight(1f)) {
+                        Text(lang.str(StrKey.OpenMtl))
+                    }
+                }
                 OutlinedButton(onClick = { resetTick++ }, modifier = Modifier.weight(1f)) {
                     Text(lang.str(StrKey.ResetCamera))
                 }
             }
             Text(
-                text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)),
+                text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)) +
+                    (extraFooter?.let { "\n" + it } ?: ""),
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )

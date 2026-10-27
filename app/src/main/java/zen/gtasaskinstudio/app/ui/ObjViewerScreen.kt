@@ -41,21 +41,12 @@ fun ObjViewerScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
+        // Ringkasan dan status MTL ditaruh di footer, dekat tombol. / Summary and MTL status go in the footer, next to the buttons.
         val summary = lang.fmt(StrKey.ObjSummary, vertexCount, triangleCount)
-        Text(
-            text = if (showMtl) {
-                summary + "\n" + (mtlName?.let { "${lang.str(StrKey.MtlLoaded)} $it" } ?: lang.str(StrKey.MtlNone))
-            } else {
-                summary
-            },
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        )
-        if (showMtl) {
-            OutlinedButton(
-                onClick = onPickMtl,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            ) { Text(lang.str(StrKey.OpenMtl)) }
+        val footer = if (showMtl) {
+            summary + "\n" + (mtlName?.let { "${lang.str(StrKey.MtlLoaded)} $it" } ?: lang.str(StrKey.MtlNone))
+        } else {
+            summary
         }
         ModelTab(
             lang = lang,
@@ -64,6 +55,8 @@ fun ObjViewerScreen(
             txdLabel = txdLabel,
             onPickTxd = onPickTxd,
             modifier = Modifier.weight(1f).fillMaxWidth(),
+            onPickMtl = if (showMtl) onPickMtl else null,
+            extraFooter = footer,
         )
         if (issues.isNotEmpty()) {
             IssuesList(

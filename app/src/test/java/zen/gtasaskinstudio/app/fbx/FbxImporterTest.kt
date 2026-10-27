@@ -228,7 +228,27 @@ class FbxImporterTest {
         assertTrue(r is FbxParseResult.Failure)
     }
 
-    @Test fun multipleMeshesWarnAndUseFirst() {
+    private fun dbl(v: Double): ByteArray = byteArrayOf('D'.code.toByte()) + FbxFixture.le(java.lang.Double.doubleToRawLongBits(v), 8)
+
+    private fun modelWithLcl(id: Long, t: DoubleArray = DoubleArray(3), r: DoubleArray = DoubleArray(3)): NodeBuilder =
+        FbxFixture.node(
+            "Model",
+            listOf(FbxFixture.longProp(id), FbxFixture.str("Part\u0000\u0001Model"), FbxFixture.str("Mesh")),
+            listOf(
+                FbxFixture.node(
+                    "Properties70", emptyList(),
+                    listOf(
+                        FbxFixture.node("P", listOf(FbxFixture.str("Lcl Translation"), FbxFixture.str("Lcl Translation"), FbxFixture.str(""), FbxFixture.str("A"), dbl(t[0]), dbl(t[1]), dbl(t[2]))),
+                        FbxFixture.node("P", listOf(FbxFixture.str("Lcl Rotation"), FbxFixture.str("Lcl Rotation"), FbxFixture.str(""), FbxFixture.str("A"), dbl(r[0]), dbl(r[1]), dbl(r[2]))),
+                    ),
+                ),
+            ),
+        )
+
+    private fun oo(child: Long, parent: Long): NodeBuilder =
+        FbxFixture.node("C", listOf(FbxFixture.str("OO"), FbxFixture.longProp(child), FbxFixture.longProp(parent)))
+
+    @Test fun multipleGeometriesAreMerged() {
         val s = ok(
             FbxFixture.file(
                 7400,
@@ -238,13 +258,58 @@ class FbxImporterTest {
                 ),
             ),
         )
-        assertEquals(1, s.mesh.triangleCount)
-        assertTrue(s.issues.any { it.code == IssueCode.MULTI_GEOMETRY && it.severity == Severity.WARNING })
+        assertEquals(1 + 2, s.mesh.triangleCount)
+        assertEquals(3 + 4, s.mesh.vertexCount)
     }
 
-    @Test fun unsupportedPartsAreReportedAsInfo() {
+    @Test fun modelTranslationIsAppliedThroughConnections() {
+        val file = FbxFixture.file(
+            7400,
+            FbxFixture.objects(
+                FbxFixture.geometry(1, square.copyOf(9), intArrayOf(0, 1, -3)),
+                modelWithLcl(10, t = doubleArrayOf(10.0, 0.0, 0.0)),
+            ),
+            FbxFixture.node("Connections", emptyList(), listOf(oo(1, 10))),
+        )
+        val s = ok(file)
+        // Vertex 0 (0,0,0) pindah ke (10,0,0). / Vertex 0 (0,0,0) moves to (10,0,0).
+        assertEquals(10f, s.mesh.positions[0], 1e-5f)
+        assertEquals(0f, s.mesh.positions[1], 1e-5f)
+    }
+
+    @Test fun modelRotationAroundZIsApplied() {
+        val file = FbxFixture.file(
+            7400,
+            FbxFixture.objects(
+                FbxFixture.geometry(1, square.copyOf(9), intArrayOf(0, 1, -3)),
+                modelWithLcl(10, r = doubleArrayOf(0.0, 0.0, 90.0)),
+            ),
+            FbxFixture.node("Connections", emptyList(), listOf(oo(1, 10))),
+        )
+        val s = ok(file)
+        // Vertex 1 (1,0,0) diputar 90 derajat di Z menjadi (0,1,0). / Vertex 1 (1,0,0) rotated 90 degrees about Z becomes (0,1,0).
+        assertEquals(0f, s.mesh.positions[3], 1e-5f)
+        assertEquals(1f, s.mesh.positions[4], 1e-5f)
+    }
+
+    @Test fun materialIsTakenFromConnections() {
+        val material = FbxFixture.node("Material", listOf(FbxFixture.longProp(20), FbxFixture.str("Skin\u0000\u0001Material"), FbxFixture.str("")))
+        val file = FbxFixture.file(
+            7400,
+            FbxFixture.objects(
+                FbxFixture.geometry(1, square.copyOf(9), intArrayOf(0, 1, -3)),
+                modelWithLcl(10),
+                material,
+            ),
+            FbxFixture.node("Connections", emptyList(), listOf(oo(1, 10), oo(10, 0), oo(20, 10))),
+        )
+        val s = ok(file)
+        assertTrue(s.mesh.materials.any { it.name == "Skin" })
+    }
+
+    @Test fun unitsAreReportedAsPartialInfo() {
         val s = ok(FbxFixture.file(7400, FbxFixture.objects(FbxFixture.geometry(1, square.copyOf(9), intArrayOf(0, 1, -3)))))
-        assertTrue(s.issues.count { it.code == IssueCode.FBX_PARTIAL && it.severity == Severity.INFO } >= 2)
+        assertTrue(s.issues.any { it.code == IssueCode.FBX_PARTIAL && it.severity == Severity.INFO })
     }
 
     @Test fun everyTruncationNeverThrows() {
