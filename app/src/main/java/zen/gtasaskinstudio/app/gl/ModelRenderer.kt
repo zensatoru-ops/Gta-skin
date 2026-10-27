@@ -377,7 +377,10 @@ class ModelRenderer : GLSurfaceView.Renderer {
                 float d = abs(dot(n, light));
                 vec3 base = uColor.rgb;
                 if (uUseTex > 0.5) {
-                    vec4 t = texture2D(uTex, vUv);
+                    // GTA memakai UV di luar 0..1 (pengulangan). fract() meniru WRAP tanpa
+                    // bergantung pada tekstur power-of-two (GLES 2.0 hanya mengizinkan REPEAT pada POT).
+                    // GTA tiles UVs outside 0..1. fract() emulates WRAP without requiring power-of-two textures.
+                    vec4 t = texture2D(uTex, fract(vUv));
                     if (t.a < 0.5) discard; // alpha cutout DXT1 / DXT3 / DXT5
                     base = t.rgb;
                 }
