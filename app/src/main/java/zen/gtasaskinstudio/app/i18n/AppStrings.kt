@@ -146,8 +146,8 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
     StrKey.ErrorUnknown to ("Terjadi kesalahan tak terduga." to "An unexpected error occurred."),
     StrKey.ErrorRetry to ("Coba Lagi" to "Try Again"),
     StrKey.PhaseNotice to (
-        "Phase 3-5: membaca .dff, menampilkan model 3D, memeriksa skeleton dan skin. Tekstur dan ekspor belum tersedia." to
-            "Phases 3-5: reads .dff, shows the 3D model, inspects skeleton and skin. Textures and export are not available yet."
+        "Phase 3-7: membaca .dff dan .txd, menampilkan model 3D dengan tekstur (uji), memeriksa skeleton dan skin. Ekspor belum tersedia." to
+            "Phases 3-7: reads .dff and .txd, shows the 3D model with textures (under test), inspects skeleton and skin. Export is not available yet."
         ),
     StrKey.LangToggle to ("EN" to "ID"),
 

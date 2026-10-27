@@ -121,6 +121,9 @@ private fun ModelTab(
             }
         }
         if (scene != null) {
+            // Baris checkbox boleh digeser; baris tombol di bawahnya selalu terlihat,
+            // supaya "Buka TXD" tidak tersembunyi di luar layar.
+            // Checkbox row may scroll; the button row below is always visible so "Open TXD" is never off-screen.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -129,12 +132,23 @@ private fun ModelTab(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                LabeledCheck(lang.str(StrKey.Textures), texOn) { texOn = it }
                 LabeledCheck(lang.str(StrKey.Wireframe), wire) { wire = it }
                 LabeledCheck(lang.str(StrKey.MaterialColors), colors) { colors = it }
                 LabeledCheck(lang.str(StrKey.ShowSkeleton), skeleton) { skeleton = it }
-                LabeledCheck(lang.str(StrKey.Textures), texOn) { texOn = it }
-                OutlinedButton(onClick = onPickTxd) { Text(lang.str(StrKey.OpenTxd)) }
-                OutlinedButton(onClick = { resetTick++ }) { Text(lang.str(StrKey.ResetCamera)) }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = onPickTxd, modifier = Modifier.weight(1f)) {
+                    Text(lang.str(StrKey.OpenTxd))
+                }
+                OutlinedButton(onClick = { resetTick++ }, modifier = Modifier.weight(1f)) {
+                    Text(lang.str(StrKey.ResetCamera))
+                }
             }
             Text(
                 text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)),

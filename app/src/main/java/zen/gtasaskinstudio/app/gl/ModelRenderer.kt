@@ -2,6 +2,7 @@ package zen.gtasaskinstudio.app.gl
 
 import android.graphics.Color
 import android.opengl.GLES20
+import android.util.Log
 import android.opengl.GLSurfaceView
 import android.opengl.Matrix
 import java.nio.ByteBuffer
@@ -42,6 +43,8 @@ class ModelRenderer : GLSurfaceView.Renderer {
     @Volatile var texturesSource: List<TxdTexture>? = null
     private var texturesApplied: List<TxdTexture>? = null
     private val glTextures = HashMap<String, Int>()
+    /** Nama material yang sudah dicatat gagal (agar tidak spam log). / Material names already logged as failed. */
+    private val missingLogged = HashSet<String>()
 
     private var litProgram = 0
     private var flatProgram = 0
@@ -258,8 +261,19 @@ class ModelRenderer : GLSurfaceView.Renderer {
         val src = texturesApplied ?: return 0
         val key = materialName?.lowercase() ?: return 0
         glTextures[key]?.let { return it }
-        val t = TextureSet.find(src, materialName) ?: return 0
+        if (key in missingLogged) return 0
+        val t = TextureSet.find(src, materialName)
+        if (t == null) {
+            // Dicatat sekali per nama, supaya kasus "TXD tidak cocok" terlihat di logcat.
+            // Logged once per name so "TXD does not match" shows up in logcat.
+            missingLogged.add(key)
+            Log.w(TAG, "no TXD texture for material '$materialName' (TXD has ${src.size} textures)")
+            return 0
+        }
         val rgba = TextureSet.rgba(t)
+        // Buffer native-order langsung, sama seperti buffer vertex. / Direct native-order buffer, like the vertex buffers.
+        val pixels = ByteBuffer.allocateDirect(rgba.size).order(ByteOrder.nativeOrder())
+        pixels.put(rgba).position(0)
         val ids = IntArray(1)
         GLES20.glGenTextures(1, ids, 0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ids[0])
@@ -269,8 +283,15 @@ class ModelRenderer : GLSurfaceView.Renderer {
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexImage2D(
             GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, t.width, t.height, 0,
-            GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, ByteBuffer.wrap(rgba),
+            GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels,
         )
+        val err = GLES20.glGetError()
+        if (err != GLES20.GL_NO_ERROR) {
+            Log.e(TAG, "glTexImage2D '${t.name}' ${t.width}x${t.height} failed: 0x${Integer.toHexString(err)}")
+            GLES20.glDeleteTextures(1, ids, 0)
+            missingLogged.add(key)
+            return 0
+        }
         glTextures[key] = ids[0]
         return ids[0]
     }
@@ -281,6 +302,7 @@ class ModelRenderer : GLSurfaceView.Renderer {
             GLES20.glDeleteTextures(ids.size, ids, 0)
             glTextures.clear()
         }
+        missingLogged.clear()
     }
 
     // ------------------------------------------------------------ shaders
@@ -317,6 +339,7 @@ class ModelRenderer : GLSurfaceView.Renderer {
     }
 
     companion object {
+        private const val TAG = "GtaSkinStudio/GL"
         private val NEUTRAL = floatArrayOf(0.78f, 0.78f, 0.82f)
         private val DARK = floatArrayOf(0.10f, 0.11f, 0.17f)
 
