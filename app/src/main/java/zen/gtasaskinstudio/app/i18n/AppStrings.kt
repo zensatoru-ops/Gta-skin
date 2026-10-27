@@ -120,6 +120,9 @@ enum class StrKey {
     IssueSkinBoneCount,
     IssueSkinBoneOrder,
     IssueSkinRestPose,
+    IssueObjFace,
+    IssueObjAttributePartial,
+    IssueObjDirectiveIgnored,
 }
 
 private val table: Map<StrKey, Pair<String, String>> = mapOf(
@@ -288,6 +291,18 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
     StrKey.IssueSkinBoneOrder to (
         "Urutan bone HAnim tidak terbaca; skeleton digambar dari hierarki frame dan mungkin tidak pas dengan mesh." to
             "HAnim bone order could not be read; the skeleton is drawn from the frame hierarchy and may not fit the mesh."
+        ),
+    StrKey.IssueObjFace to (
+        "Face OBJ tidak valid (indeks di luar rentang, atau kurang dari 3 titik); dilewati." to
+            "Invalid OBJ face (index out of range or fewer than 3 corners); skipped."
+        ),
+    StrKey.IssueObjAttributePartial to (
+        "Sebagian face memiliki UV/normal dan sebagian tidak; atribut itu diabaikan untuk seluruh mesh." to
+            "Some faces have UV/normals and some do not; that attribute is ignored for the whole mesh."
+        ),
+    StrKey.IssueObjDirectiveIgnored to (
+        "Direktif OBJ diabaikan (material .mtl belum dibaca)." to
+            "OBJ directive ignored (the .mtl material file is not read yet)."
         ),
     StrKey.IssueSkinRestPose to (
         "Pose istirahat frame berbeda dari pose bind skin. Viewer memakai pose bind agar tulang pas dengan mesh." to

@@ -36,6 +36,9 @@ fun IssueCode.strKey(): StrKey = when (this) {
     IssueCode.SKIN_BONE_COUNT_MISMATCH -> StrKey.IssueSkinBoneCount
     IssueCode.SKIN_BONE_ORDER_UNKNOWN -> StrKey.IssueSkinBoneOrder
     IssueCode.SKIN_REST_POSE_DIFFERS -> StrKey.IssueSkinRestPose
+    IssueCode.OBJ_FACE_INVALID -> StrKey.IssueObjFace
+    IssueCode.OBJ_ATTRIBUTE_PARTIAL -> StrKey.IssueObjAttributePartial
+    IssueCode.OBJ_DIRECTIVE_IGNORED -> StrKey.IssueObjDirectiveIgnored
 }
 
 fun Severity.strKey(): StrKey = when (this) {
