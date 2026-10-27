@@ -52,7 +52,12 @@ enum class StrKey {
     ShowSkeleton,
     ResetCamera,
     ViewerHelp,
-    TextureNote,
+    Textures,
+    OpenTxd,
+    TxdNone,
+    TxdLoaded,
+    TxdTextures,
+    TxdSkipped,
     CannotRender,
     ParseFailedTitle,
     InfoRw,
@@ -98,6 +103,11 @@ enum class StrKey {
     IssueMultiGeometry,
     IssueUnsupportedChunks,
     IssueTrailingBytes,
+    IssueStructSizeHighByte,
+    IssueTxdPlatform,
+    IssueTxdFormat,
+    IssueTxdDataSize,
+    IssueTxdInvalid,
     IssueSkinFormatUnknown,
     IssueTriangleIndex,
     IssueMaterialIndex,
@@ -161,10 +171,15 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
         "1 jari: putar. 2 jari: geser. Cubit: zoom." to
             "One finger: rotate. Two fingers: pan. Pinch: zoom."
         ),
-    StrKey.TextureNote to (
-        "Tekstur belum didukung (Phase 7); material ditampilkan polos." to
-            "Textures are not supported yet (Phase 7); materials are shown flat."
+    StrKey.Textures to ("Tekstur" to "Show textures"),
+    StrKey.OpenTxd to ("Buka TXD" to "Open TXD"),
+    StrKey.TxdNone to (
+        "Belum ada TXD: material ditampilkan tanpa tekstur. Buka TXD yang sesuai model." to
+            "No TXD yet: materials are shown without textures. Open the TXD that matches the model."
         ),
+    StrKey.TxdLoaded to ("TXD dimuat:" to "TXD loaded:"),
+    StrKey.TxdTextures to ("tekstur" to "textures"),
+    StrKey.TxdSkipped to ("dilewati" to "skipped"),
     StrKey.CannotRender to (
         "Model tidak digambar karena validasi menemukan kesalahan. Lihat tab Catatan." to
             "The model is not drawn because validation found errors. See the Issues tab."
@@ -230,6 +245,22 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
         ),
     StrKey.IssueTrailingBytes to (
         "Ada byte sisa setelah data geometri." to "Extra bytes remain after the geometry data."
+        ),
+    StrKey.IssueTxdPlatform to (
+        "Tekstur TXD bukan platform D3D9; dilewati." to "TXD texture is not D3D9 platform; skipped."
+        ),
+    StrKey.IssueTxdFormat to (
+        "Format tekstur TXD belum didukung; dilewati." to "TXD texture format is not supported yet; skipped."
+        ),
+    StrKey.IssueTxdDataSize to (
+        "Ukuran data mip 0 tidak sesuai format dan dimensi." to "Mip 0 data size does not match the format and dimensions."
+        ),
+    StrKey.IssueTxdInvalid to (
+        "Tekstur TXD rusak atau melampaui batas; dilewati." to "TXD texture is corrupt or exceeds limits; skipped."
+        ),
+    StrKey.IssueStructSizeHighByte to (
+        "Ukuran chunk struct memakai byte atas 0x01; dibaca dari 24 bit rendah." to
+            "Struct chunk size has high byte 0x01; read from the low 24 bits."
         ),
     StrKey.IssueSkinFormatUnknown to (
         "Format Skin PLG tidak dikenali; skin diabaikan." to "Skin PLG format not recognized; skin ignored."

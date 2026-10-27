@@ -58,7 +58,14 @@ class DffParser private constructor(private val data: ByteArray) {
         var model: DffModel? = null
         var clumps = 0
         while (root.remaining >= 12) {
-            val h = root.chunk()
+            val h = try {
+                root.chunk()
+            } catch (e: ParseFailure) {
+                // Setelah clump, byte yang tidak berupa chunk dibuang dengan peringatan. / Trailing non-chunk data after the clump: warn and drop.
+                if (model == null) throw e
+                issues.add(Issue(Severity.WARNING, IssueCode.TRAILING_BYTES, root.pos, root.remaining.toString()))
+                break
+            }
             if (h.type == Rw.CLUMP) {
                 clumps++
                 if (clumps == 1) {
@@ -76,13 +83,49 @@ class DffParser private constructor(private val data: ByteArray) {
 
     // --------------------------------------------------------------- clump
 
+    private var structRepairReported = false
+
+    /**
+     * Header chunk di dalam clump. Satu pola yang terlihat di file mod (mis. KasumiFK,
+     * mai_korean): struct clump punya byte atas 0x01 pada ukuran (0x0100000C, bukan
+     * 0x0000000C). Hanya untuk struct, hanya byte atas = 0x01, dan hanya bila 24 bit
+     * rendah muat di sisa buffer. Selalu dilaporkan sebagai WARNING.
+     *
+     * Clump child header. One pattern seen in mod files (KasumiFK, mai_korean): the clump
+     * struct has high byte 0x01 in its size. Only for struct chunks, only high byte 0x01,
+     * and only when the low 24 bits fit. Always reported as a WARNING.
+     */
+    private fun clumpChild(r: ByteReader): ChunkHeader {
+        val start = r.pos
+        try {
+            return r.chunk()
+        } catch (e: ParseFailure) {
+            if (r.remaining < 12) throw e
+            val type = readInt(start)
+            val size = readInt(start + 4)
+            val low = size and 0xFFFFFF
+            if (type != Rw.STRUCT || (size ushr 24) != 1 || low > r.remaining - 12) throw e
+            if (!structRepairReported) {
+                structRepairReported = true
+                issues.add(Issue(Severity.WARNING, IssueCode.STRUCT_SIZE_HIGH_BYTE, start, "size=0x${Integer.toHexString(size)}"))
+            }
+            val repaired = ChunkHeader(type, low, readInt(start + 8), start)
+            r.pos = repaired.contentStart
+            return repaired
+        }
+    }
+
+    private fun readInt(p: Int): Int =
+        (data[p].toInt() and 0xFF) or ((data[p + 1].toInt() and 0xFF) shl 8) or
+            ((data[p + 2].toInt() and 0xFF) shl 16) or ((data[p + 3].toInt() and 0xFF) shl 24)
+
     private fun parseClump(h: ChunkHeader): DffModel {
         val r = window(h)
         var frames: List<Frame> = emptyList()
         var geometries: List<Geometry> = emptyList()
         val atomics = ArrayList<Atomic>()
         while (r.remaining >= 12) {
-            val c = r.chunk()
+            val c = clumpChild(r)
             when (c.type) {
                 Rw.STRUCT -> Unit
                 Rw.FRAME_LIST -> frames = parseFrameList(c)

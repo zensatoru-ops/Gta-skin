@@ -23,6 +23,25 @@ class DffParserTest {
 
     private fun Iterable<Issue>.has(sev: Severity, code: IssueCode) = any { it.severity == sev && it.code == code }
 
+    @Test fun structSizeHighByteIsRepairedWithWarning() {
+        val d = SyntheticDff.build()
+        // ukuran struct clump pertama: byte atas = 0x01 (pola KasumiFK / mai_korean)
+        // The clump struct size: high byte set to 0x01 (KasumiFK / mai_korean pattern)
+        assertEquals(Rw.STRUCT.toByte(), d[12]) // struct pertama di dalam clump / first child of the clump
+        d[19] = 1 // byte atas field ukuran: offset 12 + 4 + 3 / high byte of the size field
+        val s = success(d)
+        assertTrue(s.issues.has(Severity.WARNING, IssueCode.STRUCT_SIZE_HIGH_BYTE))
+        assertEquals(1, s.model.geometries.size)
+    }
+
+    @Test fun trailingNonChunkBytesAfterClumpAreWarned() {
+        val base = SyntheticDff.build()
+        val tail = "\r\n/nv/P1dN02CwE==".toByteArray(Charsets.US_ASCII)
+        val s = success(base + tail)
+        assertTrue(s.issues.has(Severity.WARNING, IssueCode.TRAILING_BYTES))
+        assertEquals(1, s.model.geometries.size)
+    }
+
     @Test fun validMinimalDffParses() {
         val s = success(SyntheticDff.build())
         assertEquals(0x36003, s.model.rwVersion)

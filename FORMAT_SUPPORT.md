@@ -73,3 +73,15 @@ sampel.
 - Bin Mesh tristrip belum didukung (UNSUPPORTED); hanya trilist.
 - Parser/validator/scene: IMPLEMENTED_UNVERIFIED di perangkat; diverifikasi di JVM (32 tes, 72 ms pada sampel, 0 error).
 - Batas pertahanan: lihat `Limits` di `rw/Issue.kt`.
+
+## 3c. Temuan Phase 6–7 / Phase 6–7 findings
+
+- DFF: pola `0x0100000C` pada struct clump (byte 19 = `01`) muncul di KasumiFK dan mai_korean; dibaca dari 24 bit rendah dan dilaporkan sebagai WARNING `STRUCT_SIZE_HIGH_BYTE`. Status: VERIFIED pada 2 sampel mod, tanpa error setelah perbaikan.
+- DFF: data non-chunk setelah clump teratas (teks base64, sekitar 35 KB) dibuang dengan WARNING `TRAILING_BYTES`. Asal teks tidak diketahui (UNKNOWN); tidak berpengaruh pada geometri.
+- Urutan bone Skin PLG mengikuti daftar node HAnim, bukan urutan frame. Status: VERIFIED pada maccer dan 117 DFF stock/mod.
+- Pose bind (inverse-bone) sama dengan pose istirahat pada 116 dari 117 file; selisih ≤ 0,05. Alice berselisih ~0,25 namun tetap berfungsi di game; dicatat sebagai INFO, bukan error.
+- Orientasi model tidak dipakai sebagai kriteria: sejumlah file terbalik di ZModeler namun normal di game.
+- TXD (A74_Alice.txd): 20 tekstur, platform D3D9 (9). Format: DXT1 (FourCC `DXT1`), A8R8G8B8 (D3DFMT 21). Level mip 0 cocok persis dengan ukuran `w×h/2` (DXT1) atau `w×h×4` (ARGB). Status: VERIFIED pada 1 sampel; DXT3/DXT5 belum diuji pada sampel.
+- Dimensi tekstur: 16 bit rendah = width, 16 bit tinggi = height. Byte ke-2 dari field level = jumlah level mip.
+- Mip > 0 tidak diparse (hanya mip 0 yang dipakai).
+- Dekode DXT dan ARGB di CPU (`rw/TxdDecoder.kt`); hasil PNG Alan74 dan Nikke_Alice sudah diperiksa visual. Status: IMPLEMENTED_UNVERIFIED di perangkat.

@@ -41,6 +41,7 @@ import zen.gtasaskinstudio.app.i18n.describe
 import zen.gtasaskinstudio.app.i18n.fmt
 import zen.gtasaskinstudio.app.i18n.str
 import zen.gtasaskinstudio.app.rw.Issue
+import zen.gtasaskinstudio.app.rw.TxdTexture
 import zen.gtasaskinstudio.app.rw.Severity
 import zen.gtasaskinstudio.app.scene.FrameTree
 import zen.gtasaskinstudio.app.scene.LoadedModel
@@ -50,7 +51,14 @@ import zen.gtasaskinstudio.app.util.rwVersionString
 
 /** Layar hasil: tab Model (3D), Info, Skeleton (hierarki + statistik skin), dan Catatan. */
 @Composable
-fun ModelViewerScreen(lang: Lang, loaded: LoadedModel, modifier: Modifier = Modifier) {
+fun ModelViewerScreen(
+    lang: Lang,
+    loaded: LoadedModel,
+    textures: List<TxdTexture>,
+    txdLabel: String?,
+    onPickTxd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var tab by rememberSaveable { mutableStateOf(0) }
     val titles = listOf(StrKey.TabModel, StrKey.TabInfo, StrKey.TabSkeleton, StrKey.TabIssues)
 
@@ -66,7 +74,7 @@ fun ModelViewerScreen(lang: Lang, loaded: LoadedModel, modifier: Modifier = Modi
             }
         }
         when (tab) {
-            0 -> ModelTab(lang, loaded.scene, Modifier.fillMaxSize())
+            0 -> ModelTab(lang, loaded.scene, textures, txdLabel, onPickTxd, Modifier.fillMaxSize())
             1 -> InfoTab(lang, loaded)
             2 -> SkeletonTab(lang, loaded)
             else -> IssuesList(lang, loaded.issues, Modifier.fillMaxSize())
@@ -77,10 +85,18 @@ fun ModelViewerScreen(lang: Lang, loaded: LoadedModel, modifier: Modifier = Modi
 // ------------------------------------------------------------------ model
 
 @Composable
-private fun ModelTab(lang: Lang, scene: SceneBuffers?, modifier: Modifier) {
+private fun ModelTab(
+    lang: Lang,
+    scene: SceneBuffers?,
+    textures: List<TxdTexture>,
+    txdLabel: String?,
+    onPickTxd: () -> Unit,
+    modifier: Modifier,
+) {
     var wire by rememberSaveable { mutableStateOf(false) }
     var colors by rememberSaveable { mutableStateOf(true) }
     var skeleton by rememberSaveable { mutableStateOf(false) }
+    var texOn by rememberSaveable { mutableStateOf(true) }
     var resetTick by remember { mutableStateOf(0) }
 
     Column(modifier = modifier) {
@@ -94,9 +110,11 @@ private fun ModelTab(lang: Lang, scene: SceneBuffers?, modifier: Modifier) {
             } else {
                 GlHost(
                     scene = scene,
+                    textures = textures,
                     wireframe = wire,
                     materialColors = colors,
                     showSkeleton = skeleton,
+                    showTextures = texOn,
                     resetTick = resetTick,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -114,10 +132,12 @@ private fun ModelTab(lang: Lang, scene: SceneBuffers?, modifier: Modifier) {
                 LabeledCheck(lang.str(StrKey.Wireframe), wire) { wire = it }
                 LabeledCheck(lang.str(StrKey.MaterialColors), colors) { colors = it }
                 LabeledCheck(lang.str(StrKey.ShowSkeleton), skeleton) { skeleton = it }
+                LabeledCheck(lang.str(StrKey.Textures), texOn) { texOn = it }
+                OutlinedButton(onClick = onPickTxd) { Text(lang.str(StrKey.OpenTxd)) }
                 OutlinedButton(onClick = { resetTick++ }) { Text(lang.str(StrKey.ResetCamera)) }
             }
             Text(
-                text = lang.str(StrKey.ViewerHelp) + "\n" + lang.str(StrKey.TextureNote),
+                text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)),
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
@@ -140,9 +160,11 @@ private fun LabeledCheck(label: String, checked: Boolean, onChange: (Boolean) ->
 @Composable
 private fun GlHost(
     scene: SceneBuffers,
+    textures: List<TxdTexture>,
     wireframe: Boolean,
     materialColors: Boolean,
     showSkeleton: Boolean,
+    showTextures: Boolean,
     resetTick: Int,
     modifier: Modifier,
 ) {
@@ -170,7 +192,8 @@ private fun GlHost(
         modifier = modifier,
         update = { v ->
             v.setScene(scene)
-            v.setDisplay(wireframe, materialColors, showSkeleton)
+            v.setTextures(textures)
+            v.setDisplay(wireframe, materialColors, showSkeleton, showTextures)
             if (v.lastResetTick != resetTick) {
                 v.lastResetTick = resetTick
                 v.resetCamera()

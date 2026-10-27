@@ -5,6 +5,7 @@ import android.content.Context
 import android.opengl.GLSurfaceView
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import zen.gtasaskinstudio.app.rw.TxdTexture
 import zen.gtasaskinstudio.app.scene.SceneBuffers
 
 /**
@@ -49,14 +50,24 @@ class ModelGLView(context: Context) : GLSurfaceView(context) {
         }
     }
 
-    fun setDisplay(wireframe: Boolean, materialColors: Boolean, showSkeleton: Boolean) {
+    fun setDisplay(wireframe: Boolean, materialColors: Boolean, showSkeleton: Boolean, showTextures: Boolean) {
         if (modelRenderer.wireframe != wireframe ||
             modelRenderer.materialColors != materialColors ||
-            modelRenderer.showSkeleton != showSkeleton
+            modelRenderer.showSkeleton != showSkeleton ||
+            modelRenderer.showTextures != showTextures
         ) {
             modelRenderer.wireframe = wireframe
             modelRenderer.materialColors = materialColors
             modelRenderer.showSkeleton = showSkeleton
+            modelRenderer.showTextures = showTextures
+            requestRender()
+        }
+    }
+
+    /** Sumber TXD; hanya diganti bila objeknya berbeda. / TXD source; replaced only when the object changes. */
+    fun setTextures(textures: List<TxdTexture>?) {
+        if (modelRenderer.texturesSource !== textures) {
+            modelRenderer.texturesSource = textures
             requestRender()
         }
     }

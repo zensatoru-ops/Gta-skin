@@ -24,7 +24,9 @@ export. Lihat roadmap di dokumen ringkasan, bagian 8.
 | 3 | Parser defensif + validator + tes unit | IMPLEMENTED_UNVERIFIED |
 | 4 | Viewer 3D (GLES 2.0) | IMPLEMENTED_UNVERIFIED |
 | 5 | Inspeksi skeleton & skin | IMPLEMENTED_UNVERIFIED |
-| 6-10 | Lihat dokumen ringkasan | Belum |
+| 6 | Perbaikan parser (struct size, trailing bytes) + skeleton bind pose | IMPLEMENTED_UNVERIFIED |
+| 7 | Tekstur TXD (D3D9 DXT1/3/5, A8R8G8B8) + tampil di viewer | IMPLEMENTED_UNVERIFIED |
+| 8-10 | Lihat dokumen ringkasan | Belum |
 
 ## Target
 

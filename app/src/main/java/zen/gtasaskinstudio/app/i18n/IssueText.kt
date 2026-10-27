@@ -19,6 +19,11 @@ fun IssueCode.strKey(): StrKey = when (this) {
     IssueCode.MULTI_GEOMETRY -> StrKey.IssueMultiGeometry
     IssueCode.UNSUPPORTED_CHUNKS -> StrKey.IssueUnsupportedChunks
     IssueCode.TRAILING_BYTES -> StrKey.IssueTrailingBytes
+    IssueCode.STRUCT_SIZE_HIGH_BYTE -> StrKey.IssueStructSizeHighByte
+    IssueCode.TXD_UNSUPPORTED_PLATFORM -> StrKey.IssueTxdPlatform
+    IssueCode.TXD_UNSUPPORTED_FORMAT -> StrKey.IssueTxdFormat
+    IssueCode.TXD_DATA_SIZE_MISMATCH -> StrKey.IssueTxdDataSize
+    IssueCode.TXD_TEXTURE_INVALID -> StrKey.IssueTxdInvalid
     IssueCode.SKIN_FORMAT_UNKNOWN -> StrKey.IssueSkinFormatUnknown
     IssueCode.TRIANGLE_INDEX_OUT_OF_RANGE -> StrKey.IssueTriangleIndex
     IssueCode.MATERIAL_INDEX_OUT_OF_RANGE -> StrKey.IssueMaterialIndex

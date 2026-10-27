@@ -32,6 +32,8 @@ class SceneBuffers(
     val materialNames: List<String?>,
     /** Titik skeleton (3 float per frame) di ruang model. */
     val framePositions: FloatArray,
+    /** UV lapisan pertama, 2 float per vertex (0,0 bila tidak ada). / First UV layer, 2 floats per vertex (0,0 if none). */
+    val uvs: FloatArray = FloatArray(0),
 )
 
 object SceneBuilder {
@@ -51,6 +53,8 @@ object SceneBuilder {
         val normals = g.normals ?: computeNormals(g)
         val rot = atomic.rot
         val tmp = FloatArray(3)
+        val uvs = FloatArray(n * 2)
+        g.uv?.let { src -> if (src.size >= n * 2) System.arraycopy(src, 0, uvs, 0, n * 2) }
 
         val vertices = FloatArray(n * 6)
         var minX = Float.POSITIVE_INFINITY; var minY = minX; var minZ = minX
@@ -161,6 +165,7 @@ object SceneBuilder {
             radius = radius,
             materialNames = g.materials.map { it.textureName },
             framePositions = framePos,
+            uvs = uvs,
         )
     }
 

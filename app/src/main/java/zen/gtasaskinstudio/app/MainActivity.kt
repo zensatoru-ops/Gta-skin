@@ -45,6 +45,9 @@ import zen.gtasaskinstudio.app.rw.Issue
 import zen.gtasaskinstudio.app.rw.IssueCode
 import zen.gtasaskinstudio.app.rw.Limits
 import zen.gtasaskinstudio.app.rw.Severity
+import zen.gtasaskinstudio.app.rw.TxdParseResult
+import zen.gtasaskinstudio.app.rw.TxdParser
+import zen.gtasaskinstudio.app.rw.TxdTexture
 import zen.gtasaskinstudio.app.saf.SUPPORTED_MIME_TYPES
 import zen.gtasaskinstudio.app.saf.SafBytesResult
 import zen.gtasaskinstudio.app.saf.SafFailureReason
@@ -94,6 +97,28 @@ private fun AppRoot() {
     }
 }
 
+/** Hasil muat TXD: nama berkas, tekstur yang dipakai, dan jumlah yang dilewati. / TXD load result. */
+private class TxdLoad(val name: String?, val textures: List<TxdTexture>, val skipped: Int)
+
+/** Baca dan parse TXD di thread latar. Kegagalan hanya menghasilkan daftar kosong. / Read and parse a TXD off the main thread. */
+private fun loadTxd(context: android.content.Context, uri: Uri): TxdLoad {
+    val info = when (val r = readSafFileInfo(context, uri)) {
+        is SafReadResult.Success -> r.info
+        is SafReadResult.Failure -> return TxdLoad(null, emptyList(), 0)
+    }
+    return when (val bytes = readSafBytes(context, info.uri, info.sizeBytes, Limits.MAX_FILE_BYTES)) {
+        is SafBytesResult.Success -> when (val p = TxdParser.parse(bytes.bytes)) {
+            is TxdParseResult.Success -> TxdLoad(
+                info.displayName,
+                p.textures,
+                p.issues.count { it.code.name.startsWith("TXD_") },
+            )
+            is TxdParseResult.Failure -> TxdLoad(info.displayName, emptyList(), p.issues.size)
+        }
+        else -> TxdLoad(info.displayName, emptyList(), 0)
+    }
+}
+
 /** Baca byte, parse, validasi, dan bangun scene di thread latar. */
 private fun loadFile(context: android.content.Context, info: SafFileInfo): ScreenState {
     return when (val bytes = readSafBytes(context, info.uri, info.sizeBytes, Limits.MAX_FILE_BYTES)) {
@@ -138,6 +163,25 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
         }
     }
     val pick = { openDocumentLauncher.launch(SUPPORTED_MIME_TYPES) }
+
+    var textures by remember { mutableStateOf<List<TxdTexture>>(emptyList()) }
+    var txdName by remember { mutableStateOf<String?>(null) }
+    var txdSkipped by remember { mutableStateOf(0) }
+    val txdLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val loaded = withContext(Dispatchers.Default) { loadTxd(context, uri) }
+            textures = loaded.textures
+            txdName = loaded.name
+            txdSkipped = loaded.skipped
+        }
+    }
+    val txdLabel = txdName?.let {
+        val base = "${lang.str(StrKey.TxdLoaded)} $it · ${textures.size} ${lang.str(StrKey.TxdTextures)}"
+        if (txdSkipped > 0) "$base · $txdSkipped ${lang.str(StrKey.TxdSkipped)}" else base
+    }
 
     Scaffold(
         topBar = {
@@ -193,6 +237,9 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 is ScreenState.Loaded -> ModelViewerScreen(
                     lang = lang,
                     loaded = current.value,
+                    textures = textures,
+                    txdLabel = txdLabel,
+                    onPickTxd = { txdLauncher.launch(SUPPORTED_MIME_TYPES) },
                     modifier = Modifier.fillMaxSize(),
                 )
                 is ScreenState.Failed -> Column(

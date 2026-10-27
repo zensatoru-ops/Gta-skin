@@ -13,6 +13,13 @@ class SceneBuilderTest {
     private fun frame(i: Int, parent: Int, x: Float, y: Float, z: Float) =
         Frame(i, parent, floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f), floatArrayOf(x, y, z), 0)
 
+    @Test fun uvsAreZeroWhenGeometryHasNoUv() {
+        val r = DffParser.parse(SyntheticDff.build()) as DffParseResult.Success
+        val s = SceneBuilder.build(r.model)
+        assertEquals(6, s.uvs.size) // 2 float per vertex, 3 vertex
+        assertTrue(s.uvs.all { it == 0f })
+    }
+
     @Test fun buildsOneDrawForOneTriangle() {
         val r = DffParser.parse(SyntheticDff.build()) as DffParseResult.Success
         val s = SceneBuilder.build(r.model)

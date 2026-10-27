@@ -12,16 +12,18 @@ import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.cos
 import kotlin.math.sin
+import zen.gtasaskinstudio.app.rw.TxdTexture
 import zen.gtasaskinstudio.app.scene.SceneBuffers
+import zen.gtasaskinstudio.app.scene.TextureSet
 
 /**
  * Renderer OpenGL ES 2.0 untuk satu model. Data model dibangun di CPU oleh
- * SceneBuilder; kelas ini hanya meng-upload dan menggambar. Tekstur belum
- * didukung (Phase 7): material digambar polos atau dengan warna per-material.
+ * SceneBuilder; kelas ini meng-upload dan menggambar. Tekstur (TXD) didekode
+ * per material saat pertama dipakai, di thread GL, lalu disimpan sebagai texture GL.
  *
  * OpenGL ES 2.0 renderer for one model. Model data is built on the CPU by
- * SceneBuilder; this class only uploads and draws. Textures are not
- * supported yet (Phase 7): materials are drawn flat or color-coded.
+ * SceneBuilder; this class uploads and draws. TXD textures are decoded per
+ * material on first use, on the GL thread, and kept as GL textures.
  */
 class ModelRenderer : GLSurfaceView.Renderer {
 
@@ -35,11 +37,17 @@ class ModelRenderer : GLSurfaceView.Renderer {
     @Volatile var distanceFactor = 2.6f
     @Volatile var panX = 0f
     @Volatile var panY = 0f
+    @Volatile var showTextures = true
+    /** Sumber tekstur dari TXD; diganti dari thread UI. / TXD texture source; replaced from the UI thread. */
+    @Volatile var texturesSource: List<TxdTexture>? = null
+    private var texturesApplied: List<TxdTexture>? = null
+    private val glTextures = HashMap<String, Int>()
 
     private var litProgram = 0
     private var flatProgram = 0
 
     private var vertexBuf = 0
+    private var uvBuf = 0
     private var indexBuf = 0
     private var wireBuf = 0
     private var skelLineBuf = 0
@@ -76,6 +84,10 @@ class ModelRenderer : GLSurfaceView.Renderer {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         val s = scene ?: return
         if (uploaded !== s) upload(s)
+        if (texturesSource !== texturesApplied) {
+            deleteTextures()
+            texturesApplied = texturesSource
+        }
 
         val r = s.radius
         val d = distanceFactor * r
@@ -111,18 +123,26 @@ class ModelRenderer : GLSurfaceView.Renderer {
         GLES20.glUseProgram(litProgram)
         val aPos = GLES20.glGetAttribLocation(litProgram, "aPos")
         val aNormal = GLES20.glGetAttribLocation(litProgram, "aNormal")
+        val aUv = GLES20.glGetAttribLocation(litProgram, "aUv")
         val uMvp = GLES20.glGetUniformLocation(litProgram, "uMvp")
         val uNormal = GLES20.glGetUniformLocation(litProgram, "uNormalMat")
         val uColor = GLES20.glGetUniformLocation(litProgram, "uColor")
+        val uTex = GLES20.glGetUniformLocation(litProgram, "uTex")
+        val uUseTex = GLES20.glGetUniformLocation(litProgram, "uUseTex")
 
         GLES20.glUniformMatrix4fv(uMvp, 1, false, mvp, 0)
         GLES20.glUniformMatrix4fv(uNormal, 1, false, viewModel, 0)
+        GLES20.glUniform1i(uTex, 0)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
 
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vertexBuf)
         GLES20.glEnableVertexAttribArray(aPos)
         GLES20.glVertexAttribPointer(aPos, 3, GLES20.GL_FLOAT, false, 24, 0)
         GLES20.glEnableVertexAttribArray(aNormal)
         GLES20.glVertexAttribPointer(aNormal, 3, GLES20.GL_FLOAT, false, 24, 12)
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, uvBuf)
+        GLES20.glEnableVertexAttribArray(aUv)
+        GLES20.glVertexAttribPointer(aUv, 2, GLES20.GL_FLOAT, false, 8, 0)
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, indexBuf)
 
         if (flatShade) {
@@ -133,12 +153,17 @@ class ModelRenderer : GLSurfaceView.Renderer {
         for (draw in s.draws) {
             val c = if (flatShade) DARK else if (materialColors) paletteColor(draw.materialIndex) else NEUTRAL
             GLES20.glUniform4f(uColor, c[0], c[1], c[2], 1f)
+            val texId = if (!flatShade && showTextures) textureFor(s.materialNames.getOrNull(draw.materialIndex)) else 0
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
+            GLES20.glUniform1f(uUseTex, if (texId != 0) 1f else 0f)
             GLES20.glDrawElements(GLES20.GL_TRIANGLES, draw.count, GLES20.GL_UNSIGNED_SHORT, draw.start * 2)
         }
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
         if (flatShade) GLES20.glDisable(GLES20.GL_POLYGON_OFFSET_FILL)
 
         GLES20.glDisableVertexAttribArray(aPos)
         GLES20.glDisableVertexAttribArray(aNormal)
+        GLES20.glDisableVertexAttribArray(aUv)
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
     }
@@ -192,14 +217,15 @@ class ModelRenderer : GLSurfaceView.Renderer {
     // ------------------------------------------------------------- upload
 
     private fun upload(s: SceneBuffers) {
-        val ids = IntArray(5)
-        val old = intArrayOf(vertexBuf, indexBuf, wireBuf, skelLineBuf, skelPointBuf).filter { it != 0 }.toIntArray()
+        val ids = IntArray(6)
+        val old = intArrayOf(vertexBuf, uvBuf, indexBuf, wireBuf, skelLineBuf, skelPointBuf).filter { it != 0 }.toIntArray()
         if (old.isNotEmpty()) GLES20.glDeleteBuffers(old.size, old, 0)
 
-        GLES20.glGenBuffers(5, ids, 0)
-        vertexBuf = ids[0]; indexBuf = ids[1]; wireBuf = ids[2]; skelLineBuf = ids[3]; skelPointBuf = ids[4]
+        GLES20.glGenBuffers(6, ids, 0)
+        vertexBuf = ids[0]; uvBuf = ids[1]; indexBuf = ids[2]; wireBuf = ids[3]; skelLineBuf = ids[4]; skelPointBuf = ids[5]
 
         bufferFloats(vertexBuf, s.vertices)
+        bufferFloats(uvBuf, s.uvs)
         bufferShorts(indexBuf, s.indices)
         bufferShorts(wireBuf, s.wireIndices)
         bufferFloats(skelLineBuf, s.skeletonLines)
@@ -223,6 +249,38 @@ class ModelRenderer : GLSurfaceView.Renderer {
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, id)
         GLES20.glBufferData(GLES20.GL_ELEMENT_ARRAY_BUFFER, data.size * 2, sb, GLES20.GL_STATIC_DRAW)
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
+    }
+
+    // ------------------------------------------------------------ textures
+
+    /** ID texture GL untuk nama material, 0 bila tidak ada. Dekode dan upload saat pertama dibutuhkan. */
+    private fun textureFor(materialName: String?): Int {
+        val src = texturesApplied ?: return 0
+        val key = materialName?.lowercase() ?: return 0
+        glTextures[key]?.let { return it }
+        val t = TextureSet.find(src, materialName) ?: return 0
+        val rgba = TextureSet.rgba(t)
+        val ids = IntArray(1)
+        GLES20.glGenTextures(1, ids, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ids[0])
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexImage2D(
+            GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, t.width, t.height, 0,
+            GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, ByteBuffer.wrap(rgba),
+        )
+        glTextures[key] = ids[0]
+        return ids[0]
+    }
+
+    private fun deleteTextures() {
+        if (glTextures.isNotEmpty()) {
+            val ids = glTextures.values.toIntArray()
+            GLES20.glDeleteTextures(ids.size, ids, 0)
+            glTextures.clear()
+        }
     }
 
     // ------------------------------------------------------------ shaders
@@ -274,21 +332,33 @@ class ModelRenderer : GLSurfaceView.Renderer {
             uniform mat4 uNormalMat;
             attribute vec3 aPos;
             attribute vec3 aNormal;
+            attribute vec2 aUv;
             varying vec3 vNormal;
+            varying vec2 vUv;
             void main() {
                 vNormal = (uNormalMat * vec4(aNormal, 0.0)).xyz;
+                vUv = aUv;
                 gl_Position = uMvp * vec4(aPos, 1.0);
             }
         """
         private const val LIT_FRAGMENT = """
             precision mediump float;
             uniform vec4 uColor;
+            uniform sampler2D uTex;
+            uniform float uUseTex;
             varying vec3 vNormal;
+            varying vec2 vUv;
             void main() {
                 vec3 n = normalize(vNormal);
                 vec3 light = normalize(vec3(0.3, 0.5, 0.8));
                 float d = abs(dot(n, light));
-                gl_FragColor = vec4(uColor.rgb * (0.30 + 0.70 * d), uColor.a);
+                vec3 base = uColor.rgb;
+                if (uUseTex > 0.5) {
+                    vec4 t = texture2D(uTex, vUv);
+                    if (t.a < 0.5) discard; // alpha cutout DXT1 / DXT3 / DXT5
+                    base = t.rgb;
+                }
+                gl_FragColor = vec4(base * (0.30 + 0.70 * d), 1.0);
             }
         """
         private const val FLAT_VERTEX = """
