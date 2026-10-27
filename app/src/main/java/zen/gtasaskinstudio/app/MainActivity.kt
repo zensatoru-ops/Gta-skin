@@ -55,11 +55,14 @@ import zen.gtasaskinstudio.app.saf.SafFileInfo
 import zen.gtasaskinstudio.app.saf.SafReadResult
 import zen.gtasaskinstudio.app.saf.readSafBytes
 import zen.gtasaskinstudio.app.saf.readSafFileInfo
+import zen.gtasaskinstudio.app.obj.ObjLoadOutcome
+import zen.gtasaskinstudio.app.obj.ObjLoader
 import zen.gtasaskinstudio.app.scene.LoadOutcome
 import zen.gtasaskinstudio.app.scene.LoadedModel
 import zen.gtasaskinstudio.app.scene.ModelLoader
 import zen.gtasaskinstudio.app.ui.IssuesList
 import zen.gtasaskinstudio.app.ui.ModelViewerScreen
+import zen.gtasaskinstudio.app.ui.ObjViewerScreen
 import zen.gtasaskinstudio.app.util.formatBytes
 
 class MainActivity : ComponentActivity() {
@@ -76,6 +79,7 @@ private sealed class ScreenState {
     data object Idle : ScreenState()
     data class Loading(val info: SafFileInfo) : ScreenState()
     data class Loaded(val value: LoadedModel) : ScreenState()
+    data class ObjLoaded(val value: ObjLoadOutcome.Loaded) : ScreenState()
     data class Failed(val info: SafFileInfo, val issues: List<Issue>) : ScreenState()
     data class NotDff(val info: SafFileInfo) : ScreenState()
     data class Error(val reason: SafFailureReason) : ScreenState()
@@ -134,6 +138,21 @@ private fun loadFile(context: android.content.Context, info: SafFileInfo): Scree
     }
 }
 
+/** Baca byte OBJ, parse, dan bangun scene di thread latar. / Read, parse and build an OBJ scene off the main thread. */
+private fun loadObjFile(context: android.content.Context, info: SafFileInfo): ScreenState {
+    return when (val bytes = readSafBytes(context, info.uri, info.sizeBytes, Limits.MAX_FILE_BYTES)) {
+        is SafBytesResult.TooLarge -> ScreenState.Failed(
+            info,
+            listOf(Issue(Severity.ERROR, IssueCode.FILE_TOO_LARGE, -1, "max ${Limits.MAX_FILE_BYTES / (1024 * 1024)} MB")),
+        )
+        is SafBytesResult.Failure -> ScreenState.Error(SafFailureReason.CANNOT_READ)
+        is SafBytesResult.Success -> when (val o = ObjLoader.load(info.displayName, info.sizeBytes, bytes.bytes)) {
+            is ObjLoadOutcome.Loaded -> ScreenState.ObjLoaded(o)
+            is ObjLoadOutcome.Failed -> ScreenState.Failed(info, o.issues)
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
@@ -149,13 +168,17 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
             is SafReadResult.Failure -> state = ScreenState.Error(result.reason)
             is SafReadResult.Success -> {
                 val info = result.info
-                val isDff = (info.displayName ?: "").lowercase().endsWith(".dff")
-                if (!isDff) {
+                val name = (info.displayName ?: "").lowercase()
+                val isDff = name.endsWith(".dff")
+                val isObj = name.endsWith(".obj")
+                if (!isDff && !isObj) {
                     state = ScreenState.NotDff(info)
                 } else {
                     state = ScreenState.Loading(info)
                     scope.launch {
-                        val next = withContext(Dispatchers.Default) { loadFile(context, info) }
+                        val next = withContext(Dispatchers.Default) {
+                            if (isDff) loadFile(context, info) else loadObjFile(context, info)
+                        }
                         state = next
                     }
                 }
@@ -209,6 +232,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 Button(onClick = pick) { Text(lang.str(StrKey.OpenFile)) }
                 val name = when (current) {
                     is ScreenState.Loaded -> current.value.displayName
+                    is ScreenState.ObjLoaded -> current.value.displayName
                     is ScreenState.Loading -> current.info.displayName
                     is ScreenState.Failed -> current.info.displayName
                     is ScreenState.NotDff -> current.info.displayName
@@ -237,6 +261,17 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 is ScreenState.Loaded -> ModelViewerScreen(
                     lang = lang,
                     loaded = current.value,
+                    textures = textures,
+                    txdLabel = txdLabel,
+                    onPickTxd = { txdLauncher.launch(SUPPORTED_MIME_TYPES) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                is ScreenState.ObjLoaded -> ObjViewerScreen(
+                    lang = lang,
+                    scene = current.value.scene,
+                    issues = current.value.issues,
+                    vertexCount = current.value.vertexCount,
+                    triangleCount = current.value.triangleCount,
                     textures = textures,
                     txdLabel = txdLabel,
                     onPickTxd = { txdLauncher.launch(SUPPORTED_MIME_TYPES) },

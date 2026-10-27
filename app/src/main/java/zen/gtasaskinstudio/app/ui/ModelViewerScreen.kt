@@ -85,7 +85,7 @@ fun ModelViewerScreen(
 // ------------------------------------------------------------------ model
 
 @Composable
-private fun ModelTab(
+internal fun ModelTab(
     lang: Lang,
     scene: SceneBuffers?,
     textures: List<TxdTexture>,

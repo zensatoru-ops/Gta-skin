@@ -123,6 +123,7 @@ enum class StrKey {
     IssueObjFace,
     IssueObjAttributePartial,
     IssueObjDirectiveIgnored,
+    ObjSummary,
 }
 
 private val table: Map<StrKey, Pair<String, String>> = mapOf(
@@ -158,9 +159,12 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
     StrKey.FileTooLarge to (
         "Berkas terlalu besar (maksimal %d MB)." to "File is too large (maximum %d MB)."
         ),
+    StrKey.ObjSummary to (
+        "%d vertex · %d segitiga" to "%d vertices · %d triangles"
+        ),
     StrKey.OnlyDffNow to (
-        "Saat ini hanya berkas .dff yang dibaca. Dukungan .txd menyusul di Phase 7." to
-            "Only .dff files are read for now. .txd support comes in Phase 7."
+        "Format yang dibaca saat ini: .dff dan .obj. TXD dibuka dari viewer." to
+            "Currently supported: .dff and .obj. Open TXD from the viewer."
         ),
     StrKey.TabModel to ("Model" to "Model"),
     StrKey.TabInfo to ("Info" to "Info"),
