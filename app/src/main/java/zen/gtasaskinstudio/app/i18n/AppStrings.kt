@@ -71,6 +71,7 @@ enum class StrKey {
     SlotNone,
     SlotAttached,
     SlotCount,
+    FlipUv,
     CannotRender,
     ParseFailedTitle,
     InfoRw,
@@ -240,6 +241,7 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
     StrKey.SlotNone to ("Belum ada tekstur yang dipasang di slot ini." to "No texture attached to this slot."),
     StrKey.SlotAttached to ("Dipasang:" to "Attached:"),
     StrKey.SlotCount to ("Slot dipasang: %d" to "Slots attached: %d"),
+    StrKey.FlipUv to ("Balik UV (V)" to "Flip UV (V)"),
     StrKey.CannotRender to (
         "Model tidak digambar karena validasi menemukan kesalahan. Lihat tab Catatan." to
             "The model is not drawn because validation found errors. See the Issues tab."

@@ -53,6 +53,8 @@ fun ObjViewerScreen(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             onPickMtl = if (showMtl) onPickMtl else null,
             extraFooter = footer,
+            // FBX dan OBJ memakai V dari bawah; default dibalik. / FBX and OBJ use V from the bottom; flipped by default.
+            flipDefault = true,
         )
         if (issues.isNotEmpty()) {
             IssuesList(

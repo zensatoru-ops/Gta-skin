@@ -40,6 +40,8 @@ class ModelRenderer : GLSurfaceView.Renderer {
     @Volatile var panX = 0f
     @Volatile var panY = 0f
     @Volatile var showTextures = true
+    /** Balik V (1 - v) sebelum sampling tekstur; default untuk FBX/OBJ. / Flip V (1 - v) before sampling; default for FBX/OBJ. */
+    @Volatile var flipV = false
     /** Sumber tekstur dari TXD; diganti dari thread UI. / TXD texture source; replaced from the UI thread. */
     @Volatile var texturesSource: List<TxdTexture>? = null
     private var texturesApplied: List<TxdTexture>? = null
@@ -143,6 +145,8 @@ class ModelRenderer : GLSurfaceView.Renderer {
         val uColor = GLES20.glGetUniformLocation(litProgram, "uColor")
         val uTex = GLES20.glGetUniformLocation(litProgram, "uTex")
         val uUseTex = GLES20.glGetUniformLocation(litProgram, "uUseTex")
+        val uFlipV = GLES20.glGetUniformLocation(litProgram, "uFlipV")
+        GLES20.glUniform1f(uFlipV, if (flipV) 1f else 0f)
 
         GLES20.glUniformMatrix4fv(uMvp, 1, false, mvp, 0)
         GLES20.glUniformMatrix4fv(uNormal, 1, false, viewModel, 0)
@@ -399,6 +403,7 @@ class ModelRenderer : GLSurfaceView.Renderer {
             uniform vec4 uColor;
             uniform sampler2D uTex;
             uniform float uUseTex;
+            uniform float uFlipV;
             varying vec3 vNormal;
             varying vec2 vUv;
             void main() {
@@ -410,7 +415,10 @@ class ModelRenderer : GLSurfaceView.Renderer {
                     // GTA memakai UV di luar 0..1 (pengulangan). fract() meniru WRAP tanpa
                     // bergantung pada tekstur power-of-two (GLES 2.0 hanya mengizinkan REPEAT pada POT).
                     // GTA tiles UVs outside 0..1. fract() emulates WRAP without requiring power-of-two textures.
-                    vec4 t = texture2D(uTex, fract(vUv));
+                    // FBX/OBJ memakai V dari bawah; gambar kita dari atas. uFlipV = 1 membalik V.
+                    // FBX/OBJ use V from the bottom; our images are top-first. uFlipV = 1 flips V.
+                    vec2 uv = vec2(vUv.x, mix(vUv.y, 1.0 - vUv.y, uFlipV));
+                    vec4 t = texture2D(uTex, fract(uv));
                     if (t.a < 0.5) discard; // alpha cutout DXT1 / DXT3 / DXT5
                     base = t.rgb;
                 }

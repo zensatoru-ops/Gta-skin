@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -107,11 +108,14 @@ internal fun ModelTab(
     onPickMtl: (() -> Unit)? = null,
     /** Teks tambahan di bawah viewer (mis. status MTL). / Extra footer text (e.g. MTL status). */
     extraFooter: String? = null,
+    /** Nilai awal "Balik UV": true untuk FBX/OBJ. / Initial "Flip UV" value: true for FBX/OBJ. */
+    flipDefault: Boolean = false,
 ) {
     var wire by rememberSaveable { mutableStateOf(false) }
     var colors by rememberSaveable { mutableStateOf(true) }
     var skeleton by rememberSaveable { mutableStateOf(false) }
     var texOn by rememberSaveable { mutableStateOf(true) }
+    var flipUv by rememberSaveable(scene, flipDefault) { mutableStateOf(flipDefault) }
     var resetTick by remember { mutableStateOf(0) }
 
     // Slot material: ketuk bagian model untuk memilih material, lalu pasang PNG/TGA.
@@ -177,6 +181,7 @@ internal fun ModelTab(
                     resetTick = resetTick,
                     slotTextures = slotTextures,
                     onMaterialPick = { pickedSlot = it },
+                    flipV = flipUv,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -196,6 +201,10 @@ internal fun ModelTab(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         LabeledCheck(lang.str(StrKey.MaterialColors), colors, Modifier.weight(1f)) { colors = it }
                         LabeledCheck(lang.str(StrKey.ShowSkeleton), skeleton, Modifier.weight(1f)) { skeleton = it }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LabeledCheck(lang.str(StrKey.FlipUv), flipUv, Modifier.weight(1f)) { flipUv = it }
+                        Spacer(Modifier.weight(1f))
                     }
                     Text(
                         text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)) +
@@ -255,6 +264,7 @@ private fun GlHost(
     resetTick: Int,
     slotTextures: Map<Int, TxdTexture>,
     onMaterialPick: (Int) -> Unit,
+    flipV: Boolean,
     modifier: Modifier,
 ) {
     val context = LocalContext.current
@@ -284,6 +294,7 @@ private fun GlHost(
             v.setTextures(textures)
             v.setSlotTextures(slotTextures)
             v.onMaterialPick = onMaterialPick
+            v.setFlipV(flipV)
             v.setDisplay(wireframe, materialColors, showSkeleton, showTextures)
             if (v.lastResetTick != resetTick) {
                 v.lastResetTick = resetTick

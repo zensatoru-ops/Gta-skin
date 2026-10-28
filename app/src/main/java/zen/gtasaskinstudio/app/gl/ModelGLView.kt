@@ -83,6 +83,14 @@ class ModelGLView(context: Context) : GLSurfaceView(context) {
         }
     }
 
+    /** Balik V tekstur (untuk FBX/OBJ). / Flip texture V (for FBX/OBJ). */
+    fun setFlipV(flip: Boolean) {
+        if (modelRenderer.flipV != flip) {
+            modelRenderer.flipV = flip
+            requestRender()
+        }
+    }
+
     /** Tekstur per slot material; hanya diganti bila objeknya berbeda. / Per-slot textures; replaced only when the object changes. */
     fun setSlotTextures(slots: Map<Int, TxdTexture>) {
         if (modelRenderer.slotTexturesSource !== slots) {
