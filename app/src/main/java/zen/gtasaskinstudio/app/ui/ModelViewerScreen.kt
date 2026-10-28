@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,7 +61,10 @@ import zen.gtasaskinstudio.app.rw.TxdTexture
 import zen.gtasaskinstudio.app.rw.Severity
 import zen.gtasaskinstudio.app.scene.FrameTree
 import zen.gtasaskinstudio.app.scene.LoadedModel
+import zen.gtasaskinstudio.app.rig.AutoRig
+import zen.gtasaskinstudio.app.rig.AutoRigResult
 import zen.gtasaskinstudio.app.scene.SceneBuffers
+import zen.gtasaskinstudio.app.scene.withSkeleton
 import zen.gtasaskinstudio.app.util.formatBytes
 import zen.gtasaskinstudio.app.util.rwVersionString
 
@@ -71,7 +78,7 @@ fun ModelViewerScreen(
     onPickTxd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var tab by rememberSaveable { mutableStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     val titles = listOf(StrKey.TabModel, StrKey.TabInfo, StrKey.TabSkeleton, StrKey.TabIssues)
 
     Column(modifier = modifier) {
@@ -116,7 +123,20 @@ internal fun ModelTab(
     var skeleton by rememberSaveable { mutableStateOf(false) }
     var texOn by rememberSaveable { mutableStateOf(true) }
     var flipUv by rememberSaveable(scene, flipDefault) { mutableStateOf(flipDefault) }
-    var resetTick by remember { mutableStateOf(0) }
+    var resetTick by remember { mutableIntStateOf(0) }
+    var showRig by remember { mutableStateOf(false) }
+    var rigResult by remember(scene) { mutableStateOf<AutoRigResult?>(null) }
+    // Rig estimasi digambar sebagai skeleton di atas model. Hanya untuk model tanpa skeleton asli.
+    // The estimated rig is drawn as a skeleton over the model. Only for models without a real skeleton.
+    val displayScene = remember(scene, rigResult) {
+        val r = rigResult
+        if (scene != null && r != null && scene.skeletonLines.isEmpty()) {
+            val g = AutoRig.geometry(r)
+            scene.withSkeleton(g.lines, g.points)
+        } else {
+            scene
+        }
+    }
 
     // Slot material: ketuk bagian model untuk memilih material, lalu pasang PNG/TGA.
     // Material slots: tap a part of the model to pick its material, then attach a PNG/TGA.
@@ -172,7 +192,7 @@ internal fun ModelTab(
                 )
             } else {
                 GlHost(
-                    scene = scene,
+                    scene = displayScene ?: scene,
                     textures = textures,
                     wireframe = wire,
                     materialColors = colors,
@@ -209,7 +229,8 @@ internal fun ModelTab(
                     Text(
                         text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)) +
                             (extraFooter?.let { "\n" + it } ?: "") +
-                            (if (slotTextures.isNotEmpty()) "\n" + lang.fmt(StrKey.SlotCount, slotTextures.size) else ""),
+                            (if (slotTextures.isNotEmpty()) "\n" + lang.fmt(StrKey.SlotCount, slotTextures.size) else "") +
+                            (rigResult?.let { "\n" + lang.fmt(StrKey.AutoRigUp, it.up.name) + ". " + lang.str(StrKey.AutoRigNote) } ?: ""),
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
@@ -223,6 +244,45 @@ internal fun ModelTab(
                         }
                         ActionButton(lang.str(StrKey.ResetCamera), { resetTick++ }, Modifier.weight(1f))
                     }
+                    if (scene.skeletonLines.isEmpty()) {
+                        ActionButton(
+                            lang.str(StrKey.AutoRig),
+                            {
+                                scope.launch {
+                                    val r = withContext(Dispatchers.Default) { AutoRig.fromInterleaved(scene.vertices) }
+                                    rigResult = r
+                                    if (r != null) skeleton = true else showRig = true
+                                }
+                            },
+                            Modifier.fillMaxWidth(),
+                        )
+                    }
+    if (showRig) {
+        AlertDialog(
+            onDismissRequest = { showRig = false },
+            title = { Text(lang.str(StrKey.AutoRigTitle)) },
+            text = {
+                val r = rigResult
+                Column(
+                    modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                ) {
+                    Text(lang.str(StrKey.AutoRigNote), style = MaterialTheme.typography.bodySmall)
+                    if (r == null) {
+                        Text(lang.str(StrKey.AutoRigNone))
+                    } else {
+                        Text(lang.fmt(StrKey.AutoRigUp, r.up.name), modifier = Modifier.padding(vertical = 4.dp))
+                        r.joints.forEach { j ->
+                            Text(
+                                String.format(java.util.Locale.US, "%-18s %+.3f %+.3f %+.3f", j.boneName, j.x, j.y, j.z),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showRig = false }) { Text(lang.str(StrKey.SlotCancel)) } },
+        )
+    }
                 }
             }
         }

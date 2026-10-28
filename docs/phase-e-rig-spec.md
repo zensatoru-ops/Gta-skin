@@ -102,13 +102,16 @@ Aturan:
 - Model dengan frame tambahan (mod) bisa punya hierarki berbeda. Mereka ditolak
   dengan pesan jelas, bukan dipaksa cocok.
 
-## 6. OBJ (ditunda)
+## 6. OBJ tanpa bobot (estimasi)
 
-OBJ tidak punya bobot. Rencana:
-- Tahap berikutnya: pengguna menaruh penanda manual (misalnya pangkal kepala, siku,
-  lutut) di viewer, lalu bone template dipasang ke penanda itu.
-- Hasilnya ditandai sebagai **estimasi manual**, bukan rig yang sudah diverifikasi.
-- Tidak ada tebakan otomatis berdasarkan bentuk mesh.
+OBJ tidak punya bobot atau tulang. Yang dibuat sekarang:
+- `HumanoidFitter.detectUp` menebak sumbu tinggi dari rentang terbesar, dan pemanggil boleh menimpanya.
+- `HumanoidFitter.estimate` memberi posisi sendi dari bounding box, dengan proporsi tinggi perkiraan.
+  Sisi L di +X dan R di -X. Bone yang tidak dicakup estimasi memakai posisi induknya.
+- Hasilnya **estimasi**, bukan rig terverifikasi. Pengguna harus mengoreksi sendi secara manual sebelum dipakai.
+- Uji: contoh OBJ Blender tanpa rig (36.336 vertex, Y-up) menghasilkan kaki di pergelangan
+  (y ≈ -0.95 dari dasar -1.02), kepala di atas pinggul, dan lengan simetris.
+- Estimasi tidak membaca bentuk mesh di luar bounding box. Tebakan yang lebih cerdas belum dikerjakan.
 
 ## 7. Urutan kerja yang disarankan
 

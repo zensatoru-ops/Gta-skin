@@ -142,6 +142,11 @@ enum class StrKey {
     MtlNone,
     MtlLoaded,
     IssueFbxPartial,
+    AutoRig,
+    AutoRigTitle,
+    AutoRigNote,
+    AutoRigUp,
+    AutoRigNone,
 }
 
 private val table: Map<StrKey, Pair<String, String>> = mapOf(
@@ -238,6 +243,14 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
     StrKey.SlotAssign to ("Pasang PNG/TGA" to "Attach PNG/TGA"),
     StrKey.SlotClear to ("Hapus pasangan" to "Remove texture"),
     StrKey.SlotCancel to ("Tutup" to "Close"),
+    StrKey.AutoRig to ("Auto-rig (estimasi)" to "Auto-rig (estimate)"),
+    StrKey.AutoRigTitle to ("Estimasi sendi" to "Joint estimate"),
+    StrKey.AutoRigNote to (
+        "Dihitung dari bounding box, bukan dari bobot. Koreksi manual sebelum dipakai." to
+            "Computed from the bounding box, not from weights. Correct manually before use."
+        ),
+    StrKey.AutoRigUp to ("Sumbu tinggi: %s" to "Height axis: %s"),
+    StrKey.AutoRigNone to ("Model terlalu kecil atau datar untuk diestimasi." to "Model is too small or flat to estimate."),
     StrKey.SlotNone to ("Belum ada tekstur yang dipasang di slot ini." to "No texture attached to this slot."),
     StrKey.SlotAttached to ("Dipasang:" to "Attached:"),
     StrKey.SlotCount to ("Slot dipasang: %d" to "Slots attached: %d"),
