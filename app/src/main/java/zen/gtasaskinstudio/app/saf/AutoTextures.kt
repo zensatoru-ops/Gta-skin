@@ -2,6 +2,7 @@ package zen.gtasaskinstudio.app.saf
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -13,6 +14,7 @@ import zen.gtasaskinstudio.app.rw.Limits
 import zen.gtasaskinstudio.app.rw.TxdFormat
 import zen.gtasaskinstudio.app.rw.TxdTexture
 import zen.gtasaskinstudio.app.scene.PngNames
+import zen.gtasaskinstudio.app.scene.TgaDecoder
 
 /** Hasil pencarian PNG otomatis di folder model. / Result of the automatic PNG search in the model's folder. */
 class AutoTextureResult(
@@ -75,6 +77,47 @@ object AutoTextures {
 
     private fun decode(file: File, name: String): TxdTexture? {
         if (!file.isFile || file.length() > Limits.MAX_FILE_BYTES) return null
+        if (file.extension.equals("tga", ignoreCase = true)) return decodeTga(file, name)
+        return decodeRaster(file, name)
+    }
+
+    /** TGA didekode dengan decoder murni, karena BitmapFactory tidak membaca TGA. / TGA uses the pure decoder; BitmapFactory cannot read TGA. */
+    private fun decodeTga(file: File, name: String): TxdTexture? {
+        val img = TgaDecoder.decode(file.readBytes()) ?: return null
+        return TxdTexture(
+            name = name,
+            maskName = "",
+            width = img.width,
+            height = img.height,
+            levels = 1,
+            d3dFormat = TxdFormat.A8R8G8B8,
+            data = img.bgra,
+        )
+    }
+
+    /**
+     * Dekode satu gambar dari byte yang sudah dibaca (dipakai saat user memilih PNG/TGA untuk slot).
+     * Decode one image from bytes already read (used when the user picks a PNG/TGA for a slot).
+     */
+    fun decodeBytes(name: String, ext: String, bytes: ByteArray): TxdTexture? {
+        if (ext.equals("tga", ignoreCase = true)) {
+            val img = TgaDecoder.decode(bytes) ?: return null
+            return TxdTexture(name, "", img.width, img.height, 1, TxdFormat.A8R8G8B8, img.bgra)
+        }
+        if (ext.lowercase() !in PngNames.IMAGE_EXTENSIONS) return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        if (bounds.outWidth > Limits.MAX_TEXTURE_DIM || bounds.outHeight > Limits.MAX_TEXTURE_DIM) return null
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        return try {
+            toA8R8G8B8(bmp, name)
+        } finally {
+            bmp.recycle()
+        }
+    }
+
+    private fun decodeRaster(file: File, name: String): TxdTexture? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -82,32 +125,37 @@ object AutoTextures {
 
         val bmp = BitmapFactory.decodeFile(file.path) ?: return null
         try {
-            val w = bmp.width
-            val h = bmp.height
-            val px = IntArray(w * h)
-            bmp.getPixels(px, 0, w, 0, 0, w, h)
-            // Urutan memori BGRA (little-endian u32 0xAARRGGBB), sama dengan decoder A8R8G8B8.
-            // Memory order BGRA (little-endian u32 0xAARRGGBB), matching the A8R8G8B8 decoder.
-            val data = ByteArray(px.size * 4)
-            for (i in px.indices) {
-                val p = px[i]
-                val o = i * 4
-                data[o] = p.toByte()
-                data[o + 1] = (p shr 8).toByte()
-                data[o + 2] = (p shr 16).toByte()
-                data[o + 3] = (p ushr 24).toByte()
-            }
-            return TxdTexture(
-                name = name,
-                maskName = "",
-                width = w,
-                height = h,
-                levels = 1,
-                d3dFormat = TxdFormat.A8R8G8B8,
-                data = data,
-            )
+            return toA8R8G8B8(bmp, name)
         } finally {
             bmp.recycle()
         }
+    }
+
+    /** Ubah bitmap ARGB ke urutan memori BGRA untuk TxdTexture A8R8G8B8. / Convert an ARGB bitmap to BGRA memory order for an A8R8G8B8 TxdTexture. */
+    private fun toA8R8G8B8(bmp: Bitmap, name: String): TxdTexture {
+        val w = bmp.width
+        val h = bmp.height
+        val px = IntArray(w * h)
+        bmp.getPixels(px, 0, w, 0, 0, w, h)
+        // Urutan memori BGRA (little-endian u32 0xAARRGGBB), sama dengan decoder A8R8G8B8.
+        // Memory order BGRA (little-endian u32 0xAARRGGBB), matching the A8R8G8B8 decoder.
+        val data = ByteArray(px.size * 4)
+        for (i in px.indices) {
+            val p = px[i]
+            val o = i * 4
+            data[o] = p.toByte()
+            data[o + 1] = (p shr 8).toByte()
+            data[o + 2] = (p shr 16).toByte()
+            data[o + 3] = (p ushr 24).toByte()
+        }
+        return TxdTexture(
+            name = name,
+            maskName = "",
+            width = w,
+            height = h,
+            levels = 1,
+            d3dFormat = TxdFormat.A8R8G8B8,
+            data = data,
+        )
     }
 }

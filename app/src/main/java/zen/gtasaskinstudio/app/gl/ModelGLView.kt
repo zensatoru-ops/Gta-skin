@@ -7,6 +7,8 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import zen.gtasaskinstudio.app.rw.TxdTexture
 import zen.gtasaskinstudio.app.scene.SceneBuffers
+import android.view.ViewConfiguration
+import kotlin.math.hypot
 
 /**
  * GLSurfaceView dengan kontrol sentuh: 1 jari = putar, 2 jari = geser,
@@ -23,6 +25,15 @@ class ModelGLView(context: Context) : GLSurfaceView(context) {
     private var lastX = 0f
     private var lastY = 0f
     private var lastCount = 0
+
+    // Deteksi ketuk: geser atau cubit membatalkan ketuk. / Tap detection: a drag or pinch cancels the tap.
+    private var downX = 0f
+    private var downY = 0f
+    private var moved = false
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+
+    /** Dipanggil saat ketuk mengenai material; argumennya indeks material. / Called on a tap that hits a material; the argument is the material index. */
+    var onMaterialPick: ((Int) -> Unit)? = null
 
     private val scaleDetector = ScaleGestureDetector(
         context,
@@ -72,6 +83,14 @@ class ModelGLView(context: Context) : GLSurfaceView(context) {
         }
     }
 
+    /** Tekstur per slot material; hanya diganti bila objeknya berbeda. / Per-slot textures; replaced only when the object changes. */
+    fun setSlotTextures(slots: Map<Int, TxdTexture>) {
+        if (modelRenderer.slotTexturesSource !== slots) {
+            modelRenderer.slotTexturesSource = slots
+            requestRender()
+        }
+    }
+
     fun resetCamera() {
         modelRenderer.yaw = 25f
         modelRenderer.pitch = 10f
@@ -97,12 +116,15 @@ class ModelGLView(context: Context) : GLSurfaceView(context) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 lastX = cx; lastY = cy; lastCount = e.pointerCount
+                downX = e.x; downY = e.y; moved = false
             }
             MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_POINTER_UP -> {
                 // Jumlah jari berubah: mulai ulang agar tidak melompat.
                 lastX = cx; lastY = cy; lastCount = -1
+                moved = true
             }
             MotionEvent.ACTION_MOVE -> {
+                if (hypot(e.x - downX, e.y - downY) > touchSlop) moved = true
                 if (lastCount != e.pointerCount) {
                     lastX = cx; lastY = cy; lastCount = e.pointerCount
                 } else if (!scaleDetector.isInProgress) {
@@ -121,7 +143,15 @@ class ModelGLView(context: Context) : GLSurfaceView(context) {
                     requestRender()
                 }
             }
-            MotionEvent.ACTION_UP -> performClick()
+            MotionEvent.ACTION_UP -> {
+                // Ketuk tunggal yang tidak bergeser: pilih material di bawah jari. / A single unmoved tap picks the material under the finger.
+                if (!moved && e.pointerCount == 1 && width > 0 && height > 0 && !scaleDetector.isInProgress) {
+                    val nx = 2f * e.x / width - 1f
+                    val ny = 1f - 2f * e.y / height
+                    modelRenderer.pickMaterial(nx, ny)?.let { onMaterialPick?.invoke(it) }
+                }
+                performClick()
+            }
         }
         return true
     }

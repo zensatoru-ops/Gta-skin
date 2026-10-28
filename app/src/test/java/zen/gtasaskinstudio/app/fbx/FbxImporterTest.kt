@@ -307,6 +307,34 @@ class FbxImporterTest {
         assertTrue(s.mesh.materials.any { it.name == "Skin" })
     }
 
+    private fun op(child: Long, parent: Long, prop: String): NodeBuilder =
+        FbxFixture.node("C", listOf(FbxFixture.str("OP"), FbxFixture.longProp(child), FbxFixture.longProp(parent), FbxFixture.str(prop)))
+
+    @Test fun diffuseTextureFileStemBecomesTextureName() {
+        val material = FbxFixture.node("Material", listOf(FbxFixture.longProp(20), FbxFixture.str("Skin\u0000\u0001Material"), FbxFixture.str("")))
+        val texture = FbxFixture.node(
+            "Texture",
+            listOf(FbxFixture.longProp(30), FbxFixture.str("base_color_texture\u0000\u0001Texture"), FbxFixture.str("")),
+            listOf(
+                FbxFixture.node("FileName", listOf(FbxFixture.str("C:\\Users\\Admin\\Downloads\\head hhhhh.png"))),
+                FbxFixture.node("RelativeFilename", listOf(FbxFixture.str("head hhhhh.png"))),
+            ),
+        )
+        val file = FbxFixture.file(
+            7400,
+            FbxFixture.objects(
+                FbxFixture.geometry(1, square.copyOf(9), intArrayOf(0, 1, -3)),
+                modelWithLcl(10),
+                material,
+                texture,
+            ),
+            FbxFixture.node("Connections", emptyList(), listOf(oo(1, 10), oo(20, 10), op(30, 20, "DiffuseColor"))),
+        )
+        val s = ok(file)
+        assertEquals("head hhhhh", s.mesh.materials[0].textureName)
+        assertEquals("Skin", s.mesh.materials[0].name)
+    }
+
     @Test fun unitsAreReportedAsPartialInfo() {
         val s = ok(FbxFixture.file(7400, FbxFixture.objects(FbxFixture.geometry(1, square.copyOf(9), intArrayOf(0, 1, -3)))))
         assertTrue(s.issues.any { it.code == IssueCode.FBX_PARTIAL && it.severity == Severity.INFO })

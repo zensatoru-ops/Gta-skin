@@ -64,6 +64,13 @@ enum class StrKey {
     AutoPngNoPath,
     AutoPngGrant,
     AutoPngRecheck,
+    SlotTitle,
+    SlotAssign,
+    SlotClear,
+    SlotCancel,
+    SlotNone,
+    SlotAttached,
+    SlotCount,
     CannotRender,
     ParseFailedTitle,
     InfoRw,
@@ -226,6 +233,13 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
         ),
     StrKey.AutoPngGrant to ("Buka pengaturan izin" to "Open permission settings"),
     StrKey.AutoPngRecheck to ("Cek ulang" to "Recheck"),
+    StrKey.SlotTitle to ("Material: %s" to "Material: %s"),
+    StrKey.SlotAssign to ("Pasang PNG/TGA" to "Attach PNG/TGA"),
+    StrKey.SlotClear to ("Hapus pasangan" to "Remove texture"),
+    StrKey.SlotCancel to ("Tutup" to "Close"),
+    StrKey.SlotNone to ("Belum ada tekstur yang dipasang di slot ini." to "No texture attached to this slot."),
+    StrKey.SlotAttached to ("Dipasang:" to "Attached:"),
+    StrKey.SlotCount to ("Slot dipasang: %d" to "Slots attached: %d"),
     StrKey.CannotRender to (
         "Model tidak digambar karena validasi menemukan kesalahan. Lihat tab Catatan." to
             "The model is not drawn because validation found errors. See the Issues tab."

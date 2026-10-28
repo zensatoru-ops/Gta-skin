@@ -81,6 +81,26 @@ object FbxImporter {
             }
         }
 
+        // Tekstur DiffuseColor: Texture (OP) -> Material. Nama berkas diambil dari node Texture
+        // (RelativeFilename, atau basename FileName); FBX ini hanya menyimpan referensi, tanpa data gambar.
+        // DiffuseColor textures: Texture (OP) -> Material. The file name comes from the Texture node
+        // (RelativeFilename, or the basename of FileName); the FBX holds references only, not image data.
+        val textureStemOf = HashMap<Long, String>()
+        for (o in objects.children) {
+            if (o.name != "Texture") continue
+            val id = o.props.getOrNull(0) as? Long ?: continue
+            val file = (o.child("RelativeFilename")?.props?.firstOrNull() as? String)
+                ?: (o.child("FileName")?.props?.firstOrNull() as? String) ?: continue
+            stemOf(file)?.let { textureStemOf[id] = it }
+        }
+        val diffuseTextureOf = HashMap<Long, Long>()
+        doc.roots.firstOrNull { it.name == "Connections" }?.children?.forEach { c ->
+            if (c.name != "C" || c.props.getOrNull(0) != "OP" || c.props.getOrNull(3) != "DiffuseColor") return@forEach
+            val child = c.props.getOrNull(1) as? Long ?: return@forEach
+            val parent = c.props.getOrNull(2) as? Long ?: return@forEach
+            if (textureStemOf.containsKey(child)) diffuseTextureOf[parent] = child
+        }
+
         val geoms = objects.children.filter { it.name == "Geometry" && it.props.getOrNull(2) == "Mesh" }
         if (geoms.isEmpty()) fail(IssueCode.NO_GEOMETRY, "no Mesh geometry")
 
@@ -97,13 +117,19 @@ object FbxImporter {
             return m
         }
 
-        val matList = ArrayList<String>()
+        val matList = ArrayList<InternalMaterial>()
         val matIndex = HashMap<String, Int>()
+        fun matIndexOf(key: String, display: String, textureName: String?): Int =
+            matIndex.getOrPut(key) {
+                matList.add(InternalMaterial(display, textureName))
+                matList.size - 1
+            }
         fun materialFor(modelId: Long?): Int {
-            val id = modelId ?: return matIndexOf("default", matList, matIndex)
-            val mat = childrenOf[id]?.firstOrNull { materialNames.containsKey(it) }
-            val name = mat?.let { materialNames[it] } ?: "default"
-            return matIndexOf(name, matList, matIndex)
+            val matId = modelId?.let { id -> childrenOf[id]?.firstOrNull { materialNames.containsKey(it) } }
+                ?: return matIndexOf("default", "default", null)
+            val tex = diffuseTextureOf[matId]?.let { textureStemOf[it] }
+            val display = materialNames[matId] ?: "default"
+            return matIndexOf(tex ?: "mat:$matId", display, tex)
         }
 
         val parts = ArrayList<Part>()
@@ -156,16 +182,17 @@ object FbxImporter {
             uvs = uvs,
             triangles = tris,
             triMaterial = triMat,
-            materials = (if (matList.isEmpty()) listOf("default") else matList).map { InternalMaterial(it, it) },
+            materials = if (matList.isEmpty()) listOf(InternalMaterial("default", null)) else matList,
         )
         return FbxParseResult.Success(mesh, issues)
     }
 
-    private fun matIndexOf(name: String, list: MutableList<String>, index: MutableMap<String, Int>): Int =
-        index.getOrPut(name) {
-            list.add(name)
-            list.size - 1
-        }
+    /** Nama dasar berkas tanpa folder dan ekstensi: "C:\\x\\head hhhhh.png" -> "head hhhhh". / Base file name without folder and extension. */
+    private fun stemOf(path: String): String? {
+        val name = path.substringAfterLast('\\').substringAfterLast('/')
+        val stem = if (name.contains('.')) name.substringBeforeLast('.') else name
+        return stem.takeIf { it.isNotEmpty() }
+    }
 
     /** Ambil nilai P dari Properties70 (tiga angka, atau [defaultValue] untuk skala). / Read a P entry from Properties70 (three numbers, or defaultValue for scale). */
     private fun props70(model: FbxNode, name: String, defaultValue: Double = 0.0): DoubleArray {

@@ -1,7 +1,9 @@
 package zen.gtasaskinstudio.app.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,10 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -24,16 +28,23 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import zen.gtasaskinstudio.app.saf.SUPPORTED_MIME_TYPES
+import zen.gtasaskinstudio.app.saf.loadSlotTexture
 import zen.gtasaskinstudio.app.gl.ModelGLView
 import zen.gtasaskinstudio.app.i18n.Lang
 import zen.gtasaskinstudio.app.i18n.StrKey
@@ -103,6 +114,50 @@ internal fun ModelTab(
     var texOn by rememberSaveable { mutableStateOf(true) }
     var resetTick by remember { mutableStateOf(0) }
 
+    // Slot material: ketuk bagian model untuk memilih material, lalu pasang PNG/TGA.
+    // Material slots: tap a part of the model to pick its material, then attach a PNG/TGA.
+    var pickedSlot by remember(scene) { mutableStateOf<Int?>(null) }
+    var slotTextures by remember(scene) { mutableStateOf<Map<Int, TxdTexture>>(emptyMap()) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val slotPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val slot = pickedSlot
+        pickedSlot = null
+        if (slot == null || uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val tex = withContext(Dispatchers.Default) { loadSlotTexture(context, uri) }
+            if (tex != null) slotTextures = slotTextures + (slot to tex)
+        }
+    }
+    val slotIndex = pickedSlot
+    if (slotIndex != null && scene != null) {
+        val slotName = scene.materialNames.getOrNull(slotIndex) ?: "#$slotIndex"
+        val current = slotTextures[slotIndex]
+        AlertDialog(
+            onDismissRequest = { pickedSlot = null },
+            title = { Text(lang.fmt(StrKey.SlotTitle, slotName)) },
+            text = {
+                Text(if (current != null) "${lang.str(StrKey.SlotAttached)} ${current.name}" else lang.str(StrKey.SlotNone))
+            },
+            confirmButton = {
+                TextButton(onClick = { slotPicker.launch(SUPPORTED_MIME_TYPES) }) {
+                    Text(lang.str(StrKey.SlotAssign))
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (current != null) {
+                        TextButton(onClick = {
+                            slotTextures = slotTextures - slotIndex
+                            pickedSlot = null
+                        }) { Text(lang.str(StrKey.SlotClear)) }
+                    }
+                    TextButton(onClick = { pickedSlot = null }) { Text(lang.str(StrKey.SlotCancel)) }
+                }
+            },
+        )
+    }
+
     Column(modifier = modifier) {
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (scene == null) {
@@ -120,63 +175,71 @@ internal fun ModelTab(
                     showSkeleton = skeleton,
                     showTextures = texOn,
                     resetTick = resetTick,
+                    slotTextures = slotTextures,
+                    onMaterialPick = { pickedSlot = it },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
         }
         if (scene != null) {
-            // Baris checkbox boleh digeser; baris tombol di bawahnya selalu terlihat,
-            // supaya "Buka TXD" tidak tersembunyi di luar layar.
-            // Checkbox row may scroll; the button row below is always visible so "Open TXD" is never off-screen.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                LabeledCheck(lang.str(StrKey.Textures), texOn) { texOn = it }
-                LabeledCheck(lang.str(StrKey.Wireframe), wire) { wire = it }
-                LabeledCheck(lang.str(StrKey.MaterialColors), colors) { colors = it }
-                LabeledCheck(lang.str(StrKey.ShowSkeleton), skeleton) { skeleton = it }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(onClick = onPickTxd, modifier = Modifier.weight(1f)) {
-                    Text(lang.str(StrKey.OpenTxd))
-                }
-                if (onPickMtl != null) {
-                    OutlinedButton(onClick = onPickMtl, modifier = Modifier.weight(1f)) {
-                        Text(lang.str(StrKey.OpenMtl))
+            // Panel bawah: opsi tampilan dalam dua kolom, status, lalu semua tombol aksi di paling bawah.
+            // Bottom panel: display options in two columns, status, then all action buttons at the very bottom.
+            Surface(modifier = Modifier.fillMaxWidth(), tonalElevation = 2.dp) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LabeledCheck(lang.str(StrKey.Textures), texOn, Modifier.weight(1f)) { texOn = it }
+                        LabeledCheck(lang.str(StrKey.Wireframe), wire, Modifier.weight(1f)) { wire = it }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LabeledCheck(lang.str(StrKey.MaterialColors), colors, Modifier.weight(1f)) { colors = it }
+                        LabeledCheck(lang.str(StrKey.ShowSkeleton), skeleton, Modifier.weight(1f)) { skeleton = it }
+                    }
+                    Text(
+                        text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)) +
+                            (extraFooter?.let { "\n" + it } ?: "") +
+                            (if (slotTextures.isNotEmpty()) "\n" + lang.fmt(StrKey.SlotCount, slotTextures.size) else ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ActionButton(lang.str(StrKey.OpenTxd), onPickTxd, Modifier.weight(1f))
+                        if (onPickMtl != null) {
+                            ActionButton(lang.str(StrKey.OpenMtl), onPickMtl, Modifier.weight(1f))
+                        }
+                        ActionButton(lang.str(StrKey.ResetCamera), { resetTick++ }, Modifier.weight(1f))
                     }
                 }
-                OutlinedButton(onClick = { resetTick++ }, modifier = Modifier.weight(1f)) {
-                    Text(lang.str(StrKey.ResetCamera))
-                }
             }
-            Text(
-                text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)) +
-                    (extraFooter?.let { "\n" + it } ?: ""),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            )
         }
     }
 }
 
 @Composable
-private fun LabeledCheck(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun LabeledCheck(label: String, checked: Boolean, modifier: Modifier = Modifier, onChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier.clickable { onChange(!checked) },
+        modifier = modifier.clickable { onChange(!checked) },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = checked, onCheckedChange = null)
-        Text(label, modifier = Modifier.padding(end = 4.dp))
+        Text(label, modifier = Modifier.padding(end = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Tombol aksi di panel bawah; teks dipotong dengan elipsis bila sempit. / Bottom action button; text ellipsizes when narrow. */
+@Composable
+private fun ActionButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 8.dp),
+    ) {
+        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -190,6 +253,8 @@ private fun GlHost(
     showSkeleton: Boolean,
     showTextures: Boolean,
     resetTick: Int,
+    slotTextures: Map<Int, TxdTexture>,
+    onMaterialPick: (Int) -> Unit,
     modifier: Modifier,
 ) {
     val context = LocalContext.current
@@ -217,6 +282,8 @@ private fun GlHost(
         update = { v ->
             v.setScene(scene)
             v.setTextures(textures)
+            v.setSlotTextures(slotTextures)
+            v.onMaterialPick = onMaterialPick
             v.setDisplay(wireframe, materialColors, showSkeleton, showTextures)
             if (v.lastResetTick != resetTick) {
                 v.lastResetTick = resetTick

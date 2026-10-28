@@ -20,16 +20,19 @@ class PngNamesTest {
         assertTrue(PngNames.pathFromDocId("primary:../secret/x.dff") == null)
     }
 
-    @Test fun pngStemIsCaseInsensitiveOnExtension() {
-        assertEquals("Skin", PngNames.pngStem("Skin.PNG"))
-        assertEquals("body", PngNames.pngStem("body.png"))
-        assertTrue(PngNames.pngStem("body.jpg") == null)
+    @Test fun imageStemIsCaseInsensitiveOnExtension() {
+        assertEquals("Skin", PngNames.imageStem("Skin.PNG"))
+        assertEquals("body", PngNames.imageStem("body.png"))
+        assertEquals("top hhh", PngNames.imageStem("top hhh.tga"))
+        assertEquals("photo", PngNames.imageStem("photo.JPEG"))
+        assertTrue(PngNames.imageStem("body.fbx") == null)
+        assertTrue(PngNames.imageStem(".png") == null)
     }
 
     @Test fun matchesWantedNamesCaseInsensitively() {
-        val files = listOf("Hinata.FBX", "Skin.png", "body.PNG", "readme.txt")
-        val got = PngNames.match(files, listOf("skin", "BODY", "missing"))
-        assertEquals(mapOf("skin" to "Skin.png", "BODY" to "body.PNG"), got)
+        val files = listOf("Hinata.FBX", "Skin.png", "body.PNG", "readme.txt", "head hhhhh.tga")
+        val got = PngNames.match(files, listOf("skin", "BODY", "Head HHHHH", "missing"))
+        assertEquals(mapOf("skin" to "Skin.png", "BODY" to "body.PNG", "Head HHHHH" to "head hhhhh.tga"), got)
     }
 
     @Test fun firstFileWinsWhenTwoPngsShareAStem() {

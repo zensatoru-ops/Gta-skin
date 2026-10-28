@@ -14,6 +14,7 @@ import javax.microedition.khronos.opengles.GL10
 import kotlin.math.cos
 import kotlin.math.sin
 import zen.gtasaskinstudio.app.rw.TxdTexture
+import zen.gtasaskinstudio.app.scene.Picking
 import zen.gtasaskinstudio.app.scene.SceneBuffers
 import zen.gtasaskinstudio.app.scene.TextureSet
 
@@ -45,6 +46,11 @@ class ModelRenderer : GLSurfaceView.Renderer {
     private val glTextures = HashMap<String, Int>()
     /** Nama material yang sudah dicatat gagal (agar tidak spam log). / Material names already logged as failed. */
     private val missingLogged = HashSet<String>()
+    /** Tekstur per slot material (indeks material), dipasang dari UI; menang atas nama TXD. / Per-material-slot textures attached from the UI; they win over TXD names. */
+    @Volatile var slotTexturesSource: Map<Int, TxdTexture> = emptyMap()
+    private var slotsApplied: Map<Int, TxdTexture>? = null
+    /** Salinan MVP frame terakhir untuk pemilihan sentuh. / Copy of the last frame's MVP for touch picking. */
+    @Volatile private var lastMvp = FloatArray(16)
 
     private var litProgram = 0
     private var flatProgram = 0
@@ -91,6 +97,10 @@ class ModelRenderer : GLSurfaceView.Renderer {
             deleteTextures()
             texturesApplied = texturesSource
         }
+        if (slotTexturesSource !== slotsApplied) {
+            deleteTextures()
+            slotsApplied = slotTexturesSource
+        }
 
         val r = s.radius
         val d = distanceFactor * r
@@ -112,6 +122,7 @@ class ModelRenderer : GLSurfaceView.Renderer {
         Matrix.translateM(model, 0, -s.center[0], -s.center[1], -s.center[2])
         Matrix.multiplyMM(viewModel, 0, viewPanned, 0, model, 0)
         Matrix.multiplyMM(mvp, 0, proj, 0, viewModel, 0)
+        lastMvp = mvp.copyOf()
 
         if (wireframe) {
             drawSolid(s, flatShade = true)
@@ -156,7 +167,7 @@ class ModelRenderer : GLSurfaceView.Renderer {
         for (draw in s.draws) {
             val c = if (flatShade) DARK else if (materialColors) paletteColor(draw.materialIndex) else NEUTRAL
             GLES20.glUniform4f(uColor, c[0], c[1], c[2], 1f)
-            val texId = if (!flatShade && showTextures) textureFor(s.materialNames.getOrNull(draw.materialIndex)) else 0
+            val texId = if (!flatShade && showTextures) textureForDraw(s, draw.materialIndex) else 0
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
             GLES20.glUniform1f(uUseTex, if (texId != 0) 1f else 0f)
             GLES20.glDrawElements(GLES20.GL_TRIANGLES, draw.count, GLES20.GL_UNSIGNED_SHORT, draw.start * 2)
@@ -254,7 +265,19 @@ class ModelRenderer : GLSurfaceView.Renderer {
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0)
     }
 
+    /** Indeks material di bawah titik sentuh (NDC), memakai MVP frame terakhir. Dipanggil dari thread UI. / Material index under a touch point (NDC), using the last frame's MVP. Called from the UI thread. */
+    fun pickMaterial(nx: Float, ny: Float): Int? {
+        val s = scene ?: return null
+        return Picking.pickMaterial(s, lastMvp, nx, ny)
+    }
+
     // ------------------------------------------------------------ textures
+
+    /** Pilih tekstur untuk satu draw: slot yang dipasang lebih dulu, lalu nama dari TXD. / Texture for one draw: attached slot first, then the TXD name. */
+    private fun textureForDraw(s: SceneBuffers, materialIndex: Int): Int {
+        slotTexturesSource[materialIndex]?.let { return uploadTexture("slot:$materialIndex", it) }
+        return textureFor(s.materialNames.getOrNull(materialIndex))
+    }
 
     /** ID texture GL untuk nama material, 0 bila tidak ada. Dekode dan upload saat pertama dibutuhkan. */
     private fun textureFor(materialName: String?): Int {
@@ -270,6 +293,13 @@ class ModelRenderer : GLSurfaceView.Renderer {
             Log.w(TAG, "no TXD texture for material '$materialName' (TXD has ${src.size} textures)")
             return 0
         }
+        return uploadTexture(key, t)
+    }
+
+    /** Unggah satu tekstur ke GL dan simpan di cache [key]. / Upload one texture to GL and cache it under [key]. */
+    private fun uploadTexture(key: String, t: TxdTexture): Int {
+        glTextures[key]?.let { return it }
+        if (key in missingLogged) return 0
         val rgba = TextureSet.rgba(t)
         // Buffer native-order langsung, sama seperti buffer vertex. / Direct native-order buffer, like the vertex buffers.
         val pixels = ByteBuffer.allocateDirect(rgba.size).order(ByteOrder.nativeOrder())

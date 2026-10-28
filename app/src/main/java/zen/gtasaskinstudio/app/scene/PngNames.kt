@@ -23,10 +23,16 @@ object PngNames {
         return "$storageRoot/$rest"
     }
 
-    /** Nama tanpa ekstensi .png (tanpa membedakan huruf), atau null bila bukan PNG. */
-    fun pngStem(fileName: String): String? {
-        if (!fileName.endsWith(".png", ignoreCase = true)) return null
-        return fileName.substring(0, fileName.length - 4)
+    /** Ekstensi gambar yang didukung. / Supported image extensions. */
+    val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "tga")
+
+    /** Nama tanpa ekstensi gambar (tanpa membedakan huruf), atau null bila bukan gambar yang didukung. / Name without a supported image extension, or null. */
+    fun imageStem(fileName: String): String? {
+        val dot = fileName.lastIndexOf('.')
+        if (dot <= 0) return null
+        val ext = fileName.substring(dot + 1).lowercase()
+        if (ext !in IMAGE_EXTENSIONS) return null
+        return fileName.substring(0, dot)
     }
 
     /**
@@ -39,7 +45,7 @@ object PngNames {
     fun match(fileNames: List<String>, wanted: Collection<String>): Map<String, String> {
         val byStem = HashMap<String, String>()
         for (f in fileNames) {
-            val stem = pngStem(f) ?: continue
+            val stem = imageStem(f) ?: continue
             byStem.putIfAbsent(stem.lowercase(), f)
         }
         val out = LinkedHashMap<String, String>()
