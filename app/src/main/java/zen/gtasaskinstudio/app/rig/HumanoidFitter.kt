@@ -35,6 +35,11 @@ object HumanoidFitter {
     private const val MIN_TIP_VERTICES = 20
     private const val HAND_DH = 0.043
     private const val HAND_DLAT = -0.052
+    // Lebar setengah bahu sebagai pecahan tinggi badan. Standar GTA 0,118; empat mod diukur 0,06-0,09 (rata-rata 0,079),
+    // dan auto-rig dipakai untuk model tanpa rig yang lebih mirip mod. Nilai tengah: 0,09.
+    // Half shoulder width as a fraction of body height. GTA standard 0.118; four mods measured 0.06-0.09 (mean 0.079),
+    // and auto-rig targets rigless models, which resemble mods more. Middle value: 0.09.
+    private const val SHOULDER_HALF_WIDTH = 0.09
     private const val FOREARM_T = 0.52         // siku di 52% jalur bahu-tangan / elbow at 52% of shoulder-to-hand
     private const val FINGER_T = 0.16
     private const val FINGER01_T = 0.22
@@ -176,10 +181,11 @@ object HumanoidFitter {
             val handLat = (sumLat / n + HAND_DLAT).coerceIn(0.40, 1.0)
             val tag = if (side > 0) " L " else " R "
             val shoulder = PROPORTIONS[tag + "UpperArm"] ?: continue
-            val shLat = Math.abs(shoulder.lat)
+            val shLat = (SHOULDER_HALF_WIDTH * height / halfWidth).coerceIn(0.05, handLat - 0.05)
             val dh = handH - shoulder.h
             val dl = handLat - shLat
             fun at(t: Double) = place(shoulder.h + dh * t, sign * (shLat + dl * t))
+            out[tag + "UpperArm"] = at(0.0)
             out[tag + "ForeArm"] = at(FOREARM_T)
             out[tag + "Hand"] = at(1.0)
             out[tag + "Finger"] = at(1.0 + FINGER_T)
