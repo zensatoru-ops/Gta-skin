@@ -79,4 +79,49 @@ class RigTest {
         assertTrue("hip > knee", hip > knee)
         assertTrue("knee > ankle", knee > ankle)
     }
+
+    @Test fun lateralAxisFollowsWiderNonHeightAxis() {
+        // Tinggi di X, lebar di Z (mod dengan sumbu lain). / Height on X, width on Z (a mod with other axes).
+        val pts = ArrayList<Float>()
+        for (x in listOf(0f, 1.8f)) for (y in listOf(-0.1f, 0.1f)) for (z in listOf(-0.3f, 0.3f)) {
+            pts.add(x); pts.add(y); pts.add(z)
+        }
+        val j = HumanoidFitter.estimate(pts.toFloatArray(), HumanoidFitter.Up.X)!!
+        val l = j[" L UpperArm"]!!
+        val r = j[" R UpperArm"]!!
+        assertEquals(0.0, l[2] + r[2], 1e-9)
+        assertTrue(Math.abs(l[2]) > 0.05)
+        assertEquals(0.0, l[1], 1e-9)
+    }
+
+    @Test fun mirrorSwapsLeftAndRight() {
+        val a = HumanoidFitter.estimate(box(), HumanoidFitter.Up.Z)!!
+        val b = HumanoidFitter.estimate(box(), HumanoidFitter.Up.Z, mirror = true)!!
+        assertEquals(a[" L Hand"]!![0], b[" R Hand"]!![0], 1e-9)
+        assertEquals(a[" R Hand"]!![0], b[" L Hand"]!![0], 1e-9)
+    }
+
+    /** Badan sempit tinggi 1.8 (Z) dengan ujung tangan melebar di ketinggian [armZ]. / Narrow body 1.8 tall (Z) with hand tips spread at height [armZ]. */
+    private fun withArms(armZ: Float): FloatArray {
+        val pts = ArrayList<Float>()
+        for (x in listOf(-0.15f, 0.15f)) for (y in listOf(-0.1f, 0.1f)) for (z in listOf(0f, 1.8f)) {
+            pts.add(x); pts.add(y); pts.add(z)
+        }
+        for (side in listOf(-1f, 1f)) for (k in 0 until 30) {
+            pts.add(side * (0.8f + 0.001f * k)); pts.add(0f); pts.add(armZ + 0.001f * k)
+        }
+        return pts.toFloatArray()
+    }
+
+    @Test fun handHeightFollowsArmPose() {
+        val tPose = HumanoidFitter.estimate(withArms(1.45f), HumanoidFitter.Up.Z)!!
+        val armsDown = HumanoidFitter.estimate(withArms(0.95f), HumanoidFitter.Up.Z)!!
+        assertTrue("T-pose hand higher than arms-down hand", tPose[" L Hand"]!![2] > armsDown[" L Hand"]!![2] + 0.3)
+        // Tangan di sisi L (lateral +). / Hand on the L side (+lateral).
+        assertTrue(tPose[" L Hand"]!![0] > 0.0)
+        assertTrue(tPose[" R Hand"]!![0] < 0.0)
+        // Siku antara bahu dan tangan. / Elbow between shoulder and hand.
+        val e = tPose[" L ForeArm"]!![0]
+        assertTrue(e > tPose[" L UpperArm"]!![0] && e < tPose[" L Hand"]!![0])
+    }
 }

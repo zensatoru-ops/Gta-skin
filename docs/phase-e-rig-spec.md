@@ -106,8 +106,17 @@ Aturan:
 
 OBJ tidak punya bobot atau tulang. Yang dibuat sekarang:
 - `HumanoidFitter.detectUp` menebak sumbu tinggi dari rentang terbesar, dan pemanggil boleh menimpanya.
-- `HumanoidFitter.estimate` memberi posisi sendi dari bounding box, dengan proporsi tinggi perkiraan.
-  Sisi L di +X dan R di -X. Bone yang tidak dicakup estimasi memakai posisi induknya.
+- `HumanoidFitter.estimate` memberi posisi sendi dari bounding box memakai proporsi yang diukur dari
+  116 DFF skin GTA SA (median tinggi dan posisi lateral per bone; hanya angka, tanpa aset game).
+  Sisi L di +lateral dan R di -lateral. Semua 32 bone punya proporsi sendiri.
+- Pose lengan dibaca dari mesh: ujung lateral terluar (tangan) menentukan tinggi dan jarak tangan, sehingga
+  pose T, A, dan lengan turun terbaca. Offset tangan diukur dari 120 DFF (simpangan baku tinggi 0,011).
+  Sumbu tinggi dan sumbu lateral dipilih otomatis karena mod diekspor dengan sumbu berbeda (terlihat Y, X, Z).
+  Sisi L/R tidak bisa dibaca dari bounding box; `estimate(..., mirror = true)` menukarnya (perlu tombol UI).
+- Akurasi terhadap skeleton asli (galat sendi, pecahan tinggi badan):
+  - 116 DFF stok (in-sample): median 3,0%, p90 5,7%, p99 8,0%.
+  - Empat mod pose berbeda: KasumiFK (T-pose) median 6,1% (sebelumnya p90 30% jadi 13%), mai_korean 4,2%,
+    Tamaki_Nude 3,4%, hira 6,6%. Hierarki keempatnya identik dengan standar GTA (32 ID HAnim sama).
 - Hasilnya **estimasi**, bukan rig terverifikasi. Pengguna harus mengoreksi sendi secara manual sebelum dipakai.
 - Uji: contoh OBJ Blender tanpa rig (36.336 vertex, Y-up) menghasilkan kaki di pergelangan
   (y ≈ -0.95 dari dasar -1.02), kepala di atas pinggul, dan lengan simetris.
