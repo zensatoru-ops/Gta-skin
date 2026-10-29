@@ -113,10 +113,16 @@ OBJ tidak punya bobot atau tulang. Yang dibuat sekarang:
   pose T, A, dan lengan turun terbaca. Offset tangan diukur dari 120 DFF (simpangan baku tinggi 0,011).
   Sumbu tinggi dan sumbu lateral dipilih otomatis karena mod diekspor dengan sumbu berbeda (terlihat Y, X, Z).
   Sisi L/R tidak bisa dibaca dari bounding box; `estimate(..., mirror = true)` menukarnya (perlu tombol UI).
-- Akurasi terhadap skeleton asli (galat sendi, pecahan tinggi badan):
-  - 116 DFF stok (in-sample): median 3,0%, p90 5,7%, p99 8,0%.
-  - Empat mod pose berbeda: KasumiFK (T-pose) median 6,1% (sebelumnya p90 30% jadi 13%), mai_korean 4,2%,
-    Tamaki_Nude 3,4%, hira 6,6%. Hierarki keempatnya identik dengan standar GTA (32 ID HAnim sama).
+- Kaki dibaca dari mesh juga: rata-rata lateral titik di dasar tubuh menentukan jarak kaki (offset +0,006,
+  simpangan baku 0,021), dan lutut ada di 52,5% jalur pinggul-kaki. Pose kaki rapat atau renggang terbaca.
+- Akurasi terhadap skeleton asli (galat sendi, pecahan tinggi badan, median):
+  - 116 DFF stok (in-sample): 2,9%, p90 5,3%, p99 8,0%.
+  - Empat mod pose berbeda: KasumiFK (T-pose) 5,3%, mai_korean 3,0%, Tamaki_Nude 3,4%, hira 6,6%.
+    Hierarki keempatnya identik dengan standar GTA (32 ID HAnim sama).
+  - Terbesar yang tersisa: bahu (upper arm), dada, jari kaki, lengan bawah, kira-kira 6-9%.
+- Dicoba dan dibatalkan: offset kedalaman berdasarkan arah hadap (dari tonjolan telapak kaki). Membaik di dua
+  mod tetapi memburuk di dua lainnya dan di ekor galat 116 DFF stok (p99 8% jadi 14%), jadi tidak dipakai.
+  Kedalaman dibiarkan di tengah mesh. Arah hadap yang andal butuh petunjuk dari pengguna.
 - Hasilnya **estimasi**, bukan rig terverifikasi. Pengguna harus mengoreksi sendi secara manual sebelum dipakai.
 - Uji: contoh OBJ Blender tanpa rig (36.336 vertex, Y-up) menghasilkan kaki di pergelangan
   (y ≈ -0.95 dari dasar -1.02), kepala di atas pinggul, dan lengan simetris.

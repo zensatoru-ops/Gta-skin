@@ -39,6 +39,12 @@ object HumanoidFitter {
     private const val FINGER_T = 0.16
     private const val FINGER01_T = 0.22
 
+    // Pembacaan kaki: lebar kaki dari mesh di dasar tubuh; lutut di 52,5% jalur pinggul-kaki (diukur dari 120 DFF).
+    // Leg reading: foot spread from the mesh at the body's base; knee at 52.5% of the hip-to-foot path (measured on 120 DFFs).
+    private const val FOOT_BAND_H = 0.06
+    private const val FOOT_DLAT = 0.006
+    private const val KNEE_T = 0.525
+
     private val PROPORTIONS: Map<String, Prop> = mapOf(
         "Root" to Prop(0.538, 0.0),
         " Pelvis" to Prop(0.538, 0.0),
@@ -178,6 +184,33 @@ object HumanoidFitter {
             out[tag + "Hand"] = at(1.0)
             out[tag + "Finger"] = at(1.0 + FINGER_T)
             out["${if (side > 0) "L" else "R"} Finger01"] = at(1.0 + FINGER01_T)
+        }
+
+        for (side in intArrayOf(+1, -1)) {
+            val sign = if (mirror) -side else side
+            var sumLat = 0.0
+            var n = 0
+            var v = 0
+            while (v < positions.size) {
+                val h = (positions[v + upAxis] - mn[upAxis]) / height
+                val lat = sign * (positions[v + latAxis] - latCenter) / halfWidth
+                if (h <= FOOT_BAND_H && lat > 0.05) {
+                    sumLat += lat
+                    n++
+                }
+                v += 3
+            }
+            if (n < MIN_TIP_VERTICES) continue
+            val footLat = (sumLat / n + FOOT_DLAT).coerceIn(0.05, 0.95)
+            val tag = if (side > 0) " L " else " R "
+            val thigh = PROPORTIONS[tag + "Thigh"] ?: continue
+            val calf = PROPORTIONS[tag + "Calf"] ?: continue
+            val foot = PROPORTIONS[tag + "Foot"] ?: continue
+            val toe = PROPORTIONS[tag + "Toe0"] ?: continue
+            val hipLat = Math.abs(thigh.lat)
+            out[tag + "Calf"] = place(calf.h, sign * (hipLat + (footLat - hipLat) * KNEE_T))
+            out[tag + "Foot"] = place(foot.h, sign * footLat)
+            out[tag + "Toe0"] = place(toe.h, sign * footLat)
         }
         return out
     }

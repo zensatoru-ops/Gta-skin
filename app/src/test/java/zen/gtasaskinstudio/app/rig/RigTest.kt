@@ -124,4 +124,26 @@ class RigTest {
         val e = tPose[" L ForeArm"]!![0]
         assertTrue(e > tPose[" L UpperArm"]!![0] && e < tPose[" L Hand"]!![0])
     }
+
+    /** Badan tinggi 1.8 (Z) dengan telapak kaki pada lateral [footX] di dasar. / Body 1.8 tall (Z) with soles at lateral [footX] on the ground. */
+    private fun withFeet(footX: Float): FloatArray {
+        val pts = ArrayList<Float>()
+        for (x in listOf(-0.5f, 0.5f)) for (y in listOf(-0.1f, 0.1f)) for (z in listOf(0.5f, 1.8f)) {
+            pts.add(x); pts.add(y); pts.add(z)
+        }
+        for (side in listOf(-1f, 1f)) for (k in 0 until 30) {
+            pts.add(side * (footX + 0.001f * k)); pts.add(0f); pts.add(0.01f * (k % 5))
+        }
+        return pts.toFloatArray()
+    }
+
+    @Test fun footSpreadFollowsMesh() {
+        val narrow = HumanoidFitter.estimate(withFeet(0.1f), HumanoidFitter.Up.Z)!!
+        val wide = HumanoidFitter.estimate(withFeet(0.4f), HumanoidFitter.Up.Z)!!
+        assertTrue(wide[" L Foot"]!![0] > narrow[" L Foot"]!![0] + 0.2)
+        assertTrue(narrow[" R Foot"]!![0] < 0.0)
+        // Lutut ada di antara pinggul dan kaki (secara lateral). / The knee lies between hip and foot (laterally).
+        val hip = wide[" L Thigh"]!![0]; val knee = wide[" L Calf"]!![0]; val foot = wide[" L Foot"]!![0]
+        assertTrue(knee > Math.min(hip, foot) && knee < Math.max(hip, foot))
+    }
 }
