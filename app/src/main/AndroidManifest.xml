@@ -6,6 +6,8 @@
         Akses semua file; Android lama memakai READ_EXTERNAL_STORAGE.
         Find PNGs in the same folder as the model file. Android 11+ uses All files
         access; older Android uses READ_EXTERNAL_STORAGE.
+        Android 10 (mis. vivo Y51) butuh requestLegacyExternalStorage agar folder model bisa dibaca langsung.
+        Android 10 (e.g. vivo Y51) needs requestLegacyExternalStorage so the model's folder can be read directly.
     -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
@@ -15,6 +17,8 @@
 
     <application
         android:allowBackup="false"
+        android:requestLegacyExternalStorage="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@drawable/ic_launcher"

@@ -75,6 +75,8 @@ class ModelRenderer : GLSurfaceView.Renderer {
     private val viewModel = FloatArray(16)
     private val mvp = FloatArray(16)
     private var aspect = 1f
+    private var viewW = 0
+    private var viewH = 0
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.07f, 0.08f, 0.13f, 1f)
@@ -87,11 +89,16 @@ class ModelRenderer : GLSurfaceView.Renderer {
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        viewW = width
+        viewH = height
         GLES20.glViewport(0, 0, width, height)
         aspect = if (height == 0) 1f else width.toFloat() / height
     }
 
     override fun onDrawFrame(gl: GL10?) {
+        // Pasang ulang viewport tiap frame: beberapa driver (Adreno di Android 10) mengembalikannya setelah konteks diganti.
+        // Re-apply the viewport every frame: some drivers (Adreno on Android 10) reset it after a context switch.
+        if (viewW > 0 && viewH > 0) GLES20.glViewport(0, 0, viewW, viewH)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         val s = scene ?: return
         if (uploaded !== s) upload(s)

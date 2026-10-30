@@ -29,6 +29,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -222,7 +223,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
 
     var textures by remember { mutableStateOf<List<TxdTexture>>(emptyList()) }
     var txdName by remember { mutableStateOf<String?>(null) }
-    var txdSkipped by remember { mutableStateOf(0) }
+    var txdSkipped by remember { mutableIntStateOf(0) }
     val txdLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -302,17 +303,15 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 if (name != null) Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
             }
 
-            val autoInfo = autoResult
-            if (autoInfo != null && (current is ScreenState.Loaded || current is ScreenState.ObjLoaded)) {
-                AutoPngStatus(
-                    lang = lang,
-                    result = autoInfo,
-                    onGrant = { openStorageSettings(context) },
-                    onRecheck = {
-                        val u = modelUri
-                        if (u != null) scope.launch { autoSearch(u, current) }
-                    },
-                )
+            // Android 10 ke bawah: izin baca penyimpanan diminta langsung (dialog sistem), bukan lewat Pengaturan.
+            // Android 10 and below: the storage read permission is requested directly (system dialog), not via Settings.
+            val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                if (granted) {
+                    val u = modelUri
+                    if (u != null) scope.launch { autoSearch(u, current) }
+                } else {
+                    openStorageSettings(context)
+                }
             }
 
             when (current) {
@@ -338,7 +337,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                     textures = allTextures,
                     txdLabel = txdLabel,
                     onPickTxd = { txdLauncher.launch(SUPPORTED_MIME_TYPES) },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
                 is ScreenState.ObjLoaded -> ObjViewerScreen(
                     lang = lang,
@@ -352,7 +351,7 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                     textures = allTextures,
                     txdLabel = txdLabel,
                     onPickTxd = { txdLauncher.launch(SUPPORTED_MIME_TYPES) },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
                 is ScreenState.Failed -> Column(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -371,6 +370,31 @@ private fun MainScreen(lang: Lang, onToggleLang: () -> Unit) {
                 is ScreenState.Error -> Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                     ErrorCard(lang = lang, reason = current.reason, onRetry = pick)
                 }
+            }
+
+            // Status PNG ditaruh di BAWAH viewer. Kalau di atas, kemunculannya (setelah pencarian selesai) menggeser
+            // viewer ke bawah, dan SurfaceView di beberapa perangkat (vivo Android 10) tidak ikut bergeser: muncul
+            // pita hitam yang menutupi tombol Buka berkas. Di bawah, ia hanya mengubah tinggi viewer.
+            // The PNG status sits BELOW the viewer. Above it, appearing after the search finishes pushes the viewer
+            // down, and the SurfaceView on some devices (vivo, Android 10) does not follow: a black band hides the
+            // Open file button. Below, it only changes the viewer's height.
+            val autoInfo = autoResult
+            if (autoInfo != null && (current is ScreenState.Loaded || current is ScreenState.ObjLoaded)) {
+                AutoPngStatus(
+                    lang = lang,
+                    result = autoInfo,
+                    onGrant = {
+                        if (Build.VERSION.SDK_INT < 30) {
+                            storagePermission.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                        } else {
+                            openStorageSettings(context)
+                        }
+                    },
+                    onRecheck = {
+                        val u = modelUri
+                        if (u != null) scope.launch { autoSearch(u, current) }
+                    },
+                )
             }
         }
     }

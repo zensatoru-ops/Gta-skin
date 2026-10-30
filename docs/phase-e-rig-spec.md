@@ -90,8 +90,13 @@ Aturan:
   sudah ada (`badIndexVertices`).
 - Round-trip: DFF hasil ekspor harus dibaca ulang oleh `DffParser` tanpa error dan
   dengan `SkinStats` yang sama dengan sumber.
-- Uji di game (Fase G) memakai `ped.ifp` asli: nama bone di DFF harus cocok dengan
-  nama di IFP. **Ini belum bisa diuji tanpa file `ped.ifp`.**
+- Validasi terhadap `ped.ifp` asli (Fase G) **sudah dilakukan** untuk template: file ANP3 dengan 296 animasi dan
+  7.797 urutan bone terbaca penuh (`IfpReader`). Seluruh 32 bone template cocok dengan IFP pada nama persis
+  (termasuk spasi awal, mis. `" Pelvis"`) DAN ID HAnim, dan tidak ada ID di luar template selain penanda
+  tanpa ID (0xFFFFFFFF) dan ujung jari (304, 305). Sebagian kecil urutan memakai nama lain untuk ID yang sama
+  (mis. `Normal` untuk ID 0, `" Spine 1"` untuk ID 2), jadi ID adalah kunci yang lebih aman daripada nama.
+  `IfpRigCheck` bisa dipakai ulang untuk memeriksa rig hasil ekspor terhadap `ped.ifp` milik pengguna;
+  berkas IFP tidak dibundel. Uji di dalam game tetap belum dilakukan.
 
 ## 5. Batas dan risiko
 

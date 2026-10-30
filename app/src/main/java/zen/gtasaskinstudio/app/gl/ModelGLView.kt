@@ -54,6 +54,13 @@ class ModelGLView(context: Context) : GLSurfaceView(context) {
         renderMode = RENDERMODE_WHEN_DIRTY
     }
 
+    // Ukuran berubah (panel bawah berubah tinggi): minta gambar ulang agar tidak tersisa frame lama.
+    // Size changed (the bottom panel changed height): request a redraw so no stale frame remains.
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        requestRender()
+    }
+
     fun setScene(scene: SceneBuffers?) {
         if (modelRenderer.scene !== scene) {
             modelRenderer.scene = scene
