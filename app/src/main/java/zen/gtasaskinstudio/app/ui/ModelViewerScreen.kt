@@ -126,13 +126,24 @@ internal fun ModelTab(
     var resetTick by remember { mutableIntStateOf(0) }
     var showRig by remember { mutableStateOf(false) }
     var rigResult by remember(scene) { mutableStateOf<AutoRigResult?>(null) }
+    // Tes rig: pose dari ped.ifp digambar di samping model. / Rig test: the ped.ifp pose is drawn beside the model.
+    var rigTest by remember(scene) { mutableStateOf(false) }
+    var rigMirror by remember(scene) { mutableStateOf(false) }
+    var poseView by remember(scene) { mutableStateOf<PoseView?>(null) }
     // Rig estimasi digambar sebagai skeleton di atas model. Hanya untuk model tanpa skeleton asli.
     // The estimated rig is drawn as a skeleton over the model. Only for models without a real skeleton.
-    val displayScene = remember(scene, rigResult) {
+    val displayScene = remember(scene, rigResult, poseView) {
         val r = rigResult
         if (scene != null && r != null && scene.skeletonLines.isEmpty()) {
             val g = AutoRig.geometry(r)
-            scene.withSkeleton(g.lines, g.points)
+            val pv = poseView
+            if (pv == null) {
+                scene.withSkeleton(g.lines, g.points)
+            } else {
+                val c = FloatArray(3) { scene.center[it] + pv.shift[it] * 0.5f }
+                val shiftLen = Math.sqrt((pv.shift[0] * pv.shift[0] + pv.shift[1] * pv.shift[1] + pv.shift[2] * pv.shift[2]).toDouble()).toFloat()
+                scene.withSkeleton(g.lines + pv.geometry.lines, g.points + pv.geometry.points, c, scene.radius + shiftLen * 0.5f)
+            }
         } else {
             scene
         }
@@ -214,19 +225,19 @@ internal fun ModelTab(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!rigTest) Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         LabeledCheck(lang.str(StrKey.Textures), texOn, Modifier.weight(1f)) { texOn = it }
                         LabeledCheck(lang.str(StrKey.Wireframe), wire, Modifier.weight(1f)) { wire = it }
                     }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!rigTest) Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         LabeledCheck(lang.str(StrKey.MaterialColors), colors, Modifier.weight(1f)) { colors = it }
                         LabeledCheck(lang.str(StrKey.ShowSkeleton), skeleton, Modifier.weight(1f)) { skeleton = it }
                     }
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!rigTest) Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         LabeledCheck(lang.str(StrKey.FlipUv), flipUv, Modifier.weight(1f)) { flipUv = it }
                         Spacer(Modifier.weight(1f))
                     }
-                    Text(
+                    if (!rigTest) Text(
                         text = lang.str(StrKey.ViewerHelp) + "\n" + (txdLabel ?: lang.str(StrKey.TxdNone)) +
                             (extraFooter?.let { "\n" + it } ?: "") +
                             (if (slotTextures.isNotEmpty()) "\n" + lang.fmt(StrKey.SlotCount, slotTextures.size) else "") +
@@ -234,7 +245,7 @@ internal fun ModelTab(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
-                    Row(
+                    if (!rigTest) Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -244,18 +255,46 @@ internal fun ModelTab(
                         }
                         ActionButton(lang.str(StrKey.ResetCamera), { resetTick++ }, Modifier.weight(1f))
                     }
-                    if (scene.skeletonLines.isEmpty()) {
+                    if (scene.skeletonLines.isEmpty() && !rigTest) {
                         ActionButton(
                             lang.str(StrKey.AutoRig),
                             {
                                 scope.launch {
-                                    val r = withContext(Dispatchers.Default) { AutoRig.fromInterleaved(scene.vertices) }
+                                    val r = withContext(Dispatchers.Default) { AutoRig.fromInterleaved(scene.vertices, mirror = rigMirror) }
                                     rigResult = r
                                     if (r != null) skeleton = true else showRig = true
                                 }
                             },
                             Modifier.fillMaxWidth(),
                         )
+                    }
+                    val rigNow = rigResult
+                    if (scene.skeletonLines.isEmpty() && rigNow != null) {
+                        if (!rigTest) {
+                            ActionButton(
+                                lang.str(StrKey.RigTest),
+                                {
+                                    skeleton = true
+                                    rigTest = true
+                                },
+                                Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            RigTestPanel(
+                                lang = lang,
+                                rig = rigNow,
+                                mirror = rigMirror,
+                                onMirror = { m ->
+                                    rigMirror = m
+                                    scope.launch {
+                                        val r = withContext(Dispatchers.Default) { AutoRig.fromInterleaved(scene.vertices, mirror = m) }
+                                        if (r != null) rigResult = r
+                                    }
+                                },
+                                onPose = { poseView = it },
+                                onClose = { rigTest = false },
+                            )
+                        }
                     }
     if (showRig) {
         AlertDialog(

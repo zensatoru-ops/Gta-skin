@@ -147,6 +147,23 @@ enum class StrKey {
     AutoRigNote,
     AutoRigUp,
     AutoRigNone,
+    RigTest,
+    RigTestClose,
+    RigTestOpenIfp,
+    RigTestPick,
+    RigTestPlay,
+    RigTestPause,
+    RigTestMirror,
+    RigTestSearch,
+    RigTestStance,
+    RigTestIfp,
+    RigTestAnim,
+    RigTestMissing,
+    RigTestBadIfp,
+    RigTestReadFail,
+    RigTestNote,
+    RigTestIncomplete,
+    RigTestLacking,
 }
 
 private val table: Map<StrKey, Pair<String, String>> = mapOf(
@@ -250,6 +267,35 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
             "Computed from the bounding box, not from weights. Correct manually before use."
         ),
     StrKey.AutoRigUp to ("Sumbu tinggi: %s" to "Height axis: %s"),
+    StrKey.RigTest to ("Tes rig (ped.ifp)" to "Rig test (ped.ifp)"),
+    StrKey.RigTestClose to ("Tutup tes rig" to "Close rig test"),
+    StrKey.RigTestOpenIfp to ("Buka ped.ifp" to "Open ped.ifp"),
+    StrKey.RigTestPick to ("Pilih animasi" to "Choose animation"),
+    StrKey.RigTestPlay to ("Putar" to "Play"),
+    StrKey.RigTestPause to ("Jeda" to "Pause"),
+    StrKey.RigTestMirror to ("Tukar kiri/kanan" to "Swap left/right"),
+    StrKey.RigTestSearch to ("Cari animasi" to "Search animations"),
+    StrKey.RigTestStance to (
+        "Pose berdiri bawaan. Buka ped.ifp untuk memainkan animasi asli." to
+            "Built-in standing pose. Open ped.ifp to play the real animations."
+        ),
+    StrKey.RigTestIfp to ("%s: %d animasi, bone cocok %d/32" to "%s: %d animations, bones matched %d/32"),
+    StrKey.RigTestAnim to (
+        "Animasi %s: %d/32 bone digerakkan, %.2f / %.2f dtk" to
+            "Animation %s: %d/32 bones driven, %.2f / %.2f s"
+        ),
+    StrKey.RigTestMissing to (
+        "Bone tanpa data di animasi ini (pakai rotasi diam): %s" to
+            "Bones without data in this animation (rest rotation): %s"
+        ),
+    StrKey.RigTestBadIfp to ("Bukan berkas ped.ifp (ANP3) yang valid: %s" to "Not a valid ped.ifp (ANP3) file: %s"),
+    StrKey.RigTestReadFail to ("Berkas tidak bisa dibaca atau terlalu besar." to "The file could not be read or is too large."),
+    StrKey.RigTestNote to (
+        "Pose digambar di samping model. Mesh belum ikut bergerak karena belum ada bobot (Fase F)." to
+            "The pose is drawn beside the model. The mesh does not follow yet because there are no weights (Phase F)."
+        ),
+    StrKey.RigTestIncomplete to ("Rig belum lengkap, pose tidak bisa dimainkan." to "The rig is incomplete; the pose cannot be played."),
+    StrKey.RigTestLacking to ("ped.ifp ini tidak memuat bone: %s" to "This ped.ifp lacks bones: %s"),
     StrKey.AutoRigNone to ("Model terlalu kecil atau datar untuk diestimasi." to "Model is too small or flat to estimate."),
     StrKey.SlotNone to ("Belum ada tekstur yang dipasang di slot ini." to "No texture attached to this slot."),
     StrKey.SlotAttached to ("Dipasang:" to "Attached:"),

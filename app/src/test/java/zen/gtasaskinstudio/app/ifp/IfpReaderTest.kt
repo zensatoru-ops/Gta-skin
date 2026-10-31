@@ -91,4 +91,45 @@ class IfpReaderTest {
         b[32] = 0xFF.toByte(); b[33] = 0xFF.toByte(); b[34] = 0xFF.toByte(); b[35] = 0x7F
         assertTrue(IfpReader.parse(b) is IfpResult.Failure)
     }
+
+    private fun ByteArrayOutputStream.s16(v: Int) { write(v and 0xFF); write((v shr 8) and 0xFF) }
+
+    /** Satu animasi dengan satu objek tipe 3 (2 frame) dan satu tipe 4 (2 frame) berisi nilai yang diketahui. */
+    private fun ifpWithKnownKeys(): ByteArray {
+        val o = ByteArrayOutputStream()
+        o.write("ANP3".toByteArray()); o.u32(0); o.name("keys"); o.u32(1)
+        o.name("walk"); o.u32(2); o.u32(0); o.u32(1)
+        o.name("Root"); o.u32(4); o.u32(2); o.u32(0)
+        // x,y,z,w (/4096), waktu (1/60 dtk), tx,ty,tz (/1024)
+        o.s16(0); o.s16(0); o.s16(0); o.s16(4096); o.s16(0); o.s16(1024); o.s16(2048); o.s16(-512)
+        o.s16(2048); o.s16(0); o.s16(0); o.s16(3547); o.s16(60); o.s16(0); o.s16(0); o.s16(0)
+        o.name(" Pelvis"); o.u32(3); o.u32(2); o.u32(1)
+        o.s16(4096); o.s16(0); o.s16(0); o.s16(0); o.s16(30)
+        o.s16(0); o.s16(-4096); o.s16(0); o.s16(0); o.s16(90)
+        return o.toByteArray()
+    }
+
+    @Test fun keysAreNullWhenNotRequested() {
+        val r = IfpReader.parse(ifpWithKnownKeys()) as IfpResult.Success
+        assertTrue(r.file.animations[0].sequences.all { it.keys == null })
+    }
+
+    @Test fun keyframesDecodeTimeRotationAndTranslation() {
+        val r = IfpReader.parse(ifpWithKnownKeys(), withKeys = true) as IfpResult.Success
+        val root = r.file.animations[0].sequences[0].keys!!
+        assertEquals(0.0f, root.times[0], 1e-6f)
+        assertEquals(1.0f, root.times[1], 1e-6f)            // 60 tik = 1 detik
+        assertEquals(1.0f, root.rotations[0], 1e-6f)        // w pertama
+        assertEquals(0.5f, root.rotations[4 + 1], 1e-6f)    // x kedua = 2048/4096
+        assertEquals(3547f / 4096f, root.rotations[4], 1e-6f)
+        val tr = root.translations!!
+        assertEquals(1.0f, tr[0], 1e-6f)                    // 1024/1024
+        assertEquals(2.0f, tr[1], 1e-6f)
+        assertEquals(-0.5f, tr[2], 1e-6f)
+        val pelvis = r.file.animations[0].sequences[1].keys!!
+        assertEquals(null, pelvis.translations)
+        assertEquals(1.0f, pelvis.rotations[1], 1e-6f)      // x = 4096/4096
+        assertEquals(-1.0f, pelvis.rotations[4 + 2], 1e-6f) // y kedua
+        assertEquals(1.5f, pelvis.times[1], 1e-6f)          // 90 tik
+    }
 }

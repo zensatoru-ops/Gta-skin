@@ -2,8 +2,21 @@ package zen.gtasaskinstudio.app.ifp
 
 import zen.gtasaskinstudio.app.rig.GtaStandardRig
 
+/**
+ * Isi keyframe satu bone: waktu dalam detik, rotasi w,x,y,z per frame, dan translasi x,y,z per frame (hanya tipe 4, root).
+ * Keyframe contents of one bone: times in seconds, rotation w,x,y,z per frame, and translation x,y,z per frame (type 4 only, root).
+ */
+class IfpKeys(val times: FloatArray, val rotations: FloatArray, val translations: FloatArray?)
+
 /** Satu urutan keyframe untuk satu bone. / One keyframe sequence for one bone. */
-class IfpSequence(val name: String, val frameType: Int, val frameCount: Int, val boneId: Long)
+class IfpSequence(
+    val name: String,
+    val frameType: Int,
+    val frameCount: Int,
+    val boneId: Long,
+    /** Null bila diparse tanpa isi keyframe. / Null when parsed without keyframe contents. */
+    val keys: IfpKeys? = null,
+)
 
 class IfpAnimation(val name: String, val sequences: List<IfpSequence>)
 
@@ -38,7 +51,16 @@ object IfpReader {
         else -> -1
     }
 
-    fun parse(bytes: ByteArray): IfpResult {
+    /** Satuan waktu ANP3: 1/60 detik. / ANP3 time unit: 1/60 second. */
+    private const val TICKS_PER_SECOND = 60f
+    private const val ROT_SCALE = 4096f
+    private const val POS_SCALE = 1024f
+
+    /**
+     * @param withKeys true membaca isi keyframe (waktu, rotasi, translasi); false hanya melewatinya (lebih hemat).
+     *                 true reads keyframe contents (time, rotation, translation); false only skips them (cheaper).
+     */
+    fun parse(bytes: ByteArray, withKeys: Boolean = false): IfpResult {
         if (bytes.size < HEADER) return IfpResult.Failure("too short")
         if (bytes[0] != 'A'.code.toByte() || bytes[1] != 'N'.code.toByte() ||
             bytes[2] != 'P'.code.toByte() || bytes[3] != '3'.code.toByte()
@@ -66,13 +88,41 @@ object IfpReader {
                 val fb = frameBytes(type)
                 if (fb < 0) return IfpResult.Failure("unknown frame type $type")
                 if (frames < 0 || frames.toLong() * fb > bytes.size - off) return IfpResult.Failure("truncated frames in $aName/$oName")
+                val keys = if (withKeys) readKeys(bytes, off, type, frames) else null
                 off += frames * fb
-                seqs.add(IfpSequence(oName, type, frames, boneId))
+                seqs.add(IfpSequence(oName, type, frames, boneId, keys))
             }
             anims.add(IfpAnimation(aName, seqs))
         }
         return IfpResult.Success(IfpFile(name, anims))
     }
+
+    private fun readKeys(b: ByteArray, start: Int, type: Int, frames: Int): IfpKeys {
+        val fb = frameBytes(type)
+        val times = FloatArray(frames)
+        val rot = FloatArray(frames * 4)
+        val tr = if (type == 4) FloatArray(frames * 3) else null
+        for (i in 0 until frames) {
+            val o = start + i * fb
+            // Urutan di berkas x,y,z,w (int16/4096), lalu waktu (uint16); tipe 4 menambah x,y,z translasi (int16/1024).
+            // On disk: x,y,z,w (int16/4096), then time (uint16); type 4 adds x,y,z translation (int16/1024).
+            rot[i * 4] = s16(b, o + 6) / ROT_SCALE
+            rot[i * 4 + 1] = s16(b, o) / ROT_SCALE
+            rot[i * 4 + 2] = s16(b, o + 2) / ROT_SCALE
+            rot[i * 4 + 3] = s16(b, o + 4) / ROT_SCALE
+            times[i] = u16(b, o + 8) / TICKS_PER_SECOND
+            if (tr != null) {
+                tr[i * 3] = s16(b, o + 10) / POS_SCALE
+                tr[i * 3 + 1] = s16(b, o + 12) / POS_SCALE
+                tr[i * 3 + 2] = s16(b, o + 14) / POS_SCALE
+            }
+        }
+        return IfpKeys(times, rot, tr)
+    }
+
+    private fun u16(b: ByteArray, o: Int): Int = (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8)
+
+    private fun s16(b: ByteArray, o: Int): Int = u16(b, o).toShort().toInt()
 
     private fun u32(b: ByteArray, o: Int): Int =
         (b[o].toInt() and 0xFF) or ((b[o + 1].toInt() and 0xFF) shl 8) or

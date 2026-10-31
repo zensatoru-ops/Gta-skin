@@ -13,7 +13,7 @@ data class AutoRigResult(val up: HumanoidFitter.Up, val joints: List<AutoRigJoin
 object AutoRig {
 
     /** [vertices] interleaved px,py,pz,nx,ny,nz (stride 6), seperti SceneBuffers. / Interleaved as in SceneBuffers. */
-    fun fromInterleaved(vertices: FloatArray, stride: Int = 6): AutoRigResult? {
+    fun fromInterleaved(vertices: FloatArray, stride: Int = 6, mirror: Boolean = false): AutoRigResult? {
         if (stride < 3) return null
         val count = vertices.size / stride
         if (count < 3) return null
@@ -24,7 +24,7 @@ object AutoRig {
             pos[v * 3 + 2] = vertices[v * stride + 2]
         }
         val up = HumanoidFitter.detectUp(pos) ?: return null
-        val joints = HumanoidFitter.estimate(pos, up) ?: return null
+        val joints = HumanoidFitter.estimate(pos, up, mirror) ?: return null
         val list = GtaStandardRig.BONES.filter { it.name.isNotEmpty() }.mapNotNull { b ->
             val p = joints[b.name] ?: return@mapNotNull null
             AutoRigJoint(b.name, p[0], p[1], p[2])

@@ -136,6 +136,28 @@ OBJ tidak punya bobot atau tulang. Yang dibuat sekarang:
   (y ≈ -0.95 dari dasar -1.02), kepala di atas pinggul, dan lengan simetris.
 - Estimasi tidak membaca bentuk mesh di luar bounding box. Tebakan yang lebih cerdas belum dikerjakan.
 
+## 6b. Tes rig dengan ped.ifp (v4.9)
+
+Tombol "Tes rig (ped.ifp)" muncul setelah Auto-rig. Isinya memainkan keyframe ped.ifp pada skeleton hasil estimasi,
+untuk melihat apakah rig GTA standar benar-benar bisa digerakkan oleh animasi asli.
+
+- `IfpReader.parse(bytes, withKeys = true)` membaca isi keyframe. Format frame ANP3: tipe 3 = x,y,z,w (int16/4096)
+  + waktu (uint16, 1/60 detik), 10 byte; tipe 4 menambah translasi x,y,z (int16/1024), 16 byte.
+- `PosePlayer.pose` adalah kinematika maju. Rotasi IFP adalah rotasi LOKAL mutlak (menggantikan rotasi frame DFF),
+  matriks lokal kolom = matriks dari kuaternion apa adanya. Posisi anak = posisi induk + rotasi dunia induk x offset lokal.
+  Offset lokal = arah standar (`GtaRestPose.DIR`, median 116 DFF) x panjang tulang hasil estimasi. Urutan tipe 4
+  (Root, kadang Pelvis) mengganti offset lokal dengan translasi IFP yang diskalakan ke ukuran model.
+  Bone yang tidak ada di animasi memakai rotasi diam DFF (`GtaRestPose.REST_Q`), seperti di game.
+- Rotasi diam DFF bila ditumpuk apa adanya memang "ngawur" (orientasi aneh yang normal di game); pose berdiri datang dari
+  IFP. `GtaRestPose.STANCE_Q` menyimpan frame pertama `IDLE_stance` untuk tampilan awal tanpa ped.ifp dan untuk tes.
+- Ruang GTA: X kanan, Y depan, Z atas. Ke ruang model: atas = sumbu tinggi, +lateral = sisi L, depan = lateral x atas.
+  Arah hadap tidak bisa dibaca dari mesh; kotak "Tukar kiri/kanan" membalik L/R sekaligus arah hadap.
+- Pose digambar di samping model (digeser 0,8 bentang tangan ke sisi L) karena mesh belum punya bobot; mesh belum ikut bergerak.
+- Hasil pada ped.ifp asli milik pengguna (296 animasi, 32 bone cocok): 2.664 pose (3 waktu x 296 animasi x 3 model)
+  semuanya terbatas dan lengkap. `IDLE_stance`: kepala di atas pinggul, kaki di bawah, tangan menjuntai di bawah leher.
+  `WALK_player`: kaki bergantian sekitar -0,4 sampai +0,4 terhadap pinggul. Tinggi pose sama dengan tinggi rig diam.
+  Uji ini dijalankan di luar CI karena memakai berkas milik pengguna; tes CI memakai IFP sintetis.
+
 ## 7. Urutan kerja yang disarankan
 
 1. Tes JVM untuk tabel template (bagian 2) dan pemetaan nama (bagian 3), tanpa data
