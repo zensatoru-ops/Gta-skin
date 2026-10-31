@@ -158,6 +158,28 @@ untuk melihat apakah rig GTA standar benar-benar bisa digerakkan oleh animasi as
   `WALK_player`: kaki bergantian sekitar -0,4 sampai +0,4 terhadap pinggul. Tinggi pose sama dengan tinggi rig diam.
   Uji ini dijalankan di luar CI karena memakai berkas milik pengguna; tes CI memakai IFP sintetis.
 
+## 6c. Auto-weight dan pratinjau skinning (v5.0)
+
+Bobot untuk model tanpa bobot, dan mesh yang ikut pose di tes rig.
+
+- `AutoWeights.compute`: jarak tiap vertex ke segmen 23 bone utama (bone kecil digabung: Belly ke Spine, dada ke Spine1,
+  alis dan rahang ke Head, Finger01 ke Finger, Root ke Pelvis). Bobot = 1 / (jarak / jari-jari^0,7 + eps)^6, hanya bone yang
+  jaraknya <= 1,5 x terdekat, bone sisi seberang diberi penalti jarak 2,5x, lalu dihaluskan 2 putaran lewat tepi mesh,
+  dan diambil 4 terbesar (batas GTA SA). Segmen paha mulai 20% di bawah sendi pinggul; segmen Pelvis turun 3% tinggi badan.
+  Jari-jari per bone disetel (coordinate descent) pada separuh dari 116 DFF stok.
+- Akurasi terhadap bobot asli (bone kecil digabung ke bone utama di kedua sisi; L1 = separuh jumlah selisih mutlak per vertex,
+  0 = identik, 1 = sama sekali beda):
+  - 116 DFF stok, rig dari estimasi: bone dominan benar 73,8%, L1 0,282. Separuh yang tidak dipakai menyetel: 73,6% dan 0,285.
+  - Rig asli (bukan estimasi): 77,2% dan 0,253. Selisihnya adalah harga dari galat estimasi sendi.
+  - Empat mod (tidak dipakai menyetel): 66,4% dan 0,304 dengan rig estimasi, 78,9% dan 0,230 dengan rig asli.
+  - Kaki, lengan, kepala 80-96% benar. Terlemah: pinggul/perut (Pelvis dan Spine saling tertukar), leher, klavikula.
+- `SkinPreview`: linear blend skinning di CPU. Rotasi tiap bone = swing dari arah segmen diam ke arah segmen berpose;
+  bone torso juga disejajarkan garis bahu / pinggulnya. Puntiran sepanjang lengan dan kaki TIDAK diikuti.
+- Regangan sisi segitiga setelah deformasi pada seluruh 296 animasi (3 waktu per animasi): bmymib (stok) median 1,00,
+  p99 1,50, maks 2,45; KasumiFK (mod T-pose) median 1,00, p99 1,77, maks 9,9 (bagian tipis seperti ikat pinggang dan
+  untaian rambut yang terlepas dari badan ikut tertarik).
+- Ini PRATINJAU untuk memeriksa rig, bukan bobot akhir. Bobot tidak disimpan dan belum ditulis ke Skin PLG (Fase F).
+
 ## 7. Urutan kerja yang disarankan
 
 1. Tes JVM untuk tabel template (bagian 2) dan pemetaan nama (bagian 3), tanpa data

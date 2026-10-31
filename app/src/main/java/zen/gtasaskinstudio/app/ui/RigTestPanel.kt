@@ -50,6 +50,9 @@ import zen.gtasaskinstudio.app.ifp.IfpRigCheck
 import zen.gtasaskinstudio.app.rig.AutoRig
 import zen.gtasaskinstudio.app.rig.AutoRigGeometry
 import zen.gtasaskinstudio.app.rig.AutoRigResult
+import zen.gtasaskinstudio.app.rig.AutoWeightResult
+import zen.gtasaskinstudio.app.rig.AutoWeights
+import zen.gtasaskinstudio.app.rig.SkinPreview
 import zen.gtasaskinstudio.app.rig.PoseFrame
 import zen.gtasaskinstudio.app.rig.PosePlayer
 import zen.gtasaskinstudio.app.rw.Limits
@@ -58,14 +61,24 @@ import zen.gtasaskinstudio.app.saf.SafBytesResult
 import zen.gtasaskinstudio.app.saf.SafReadResult
 import zen.gtasaskinstudio.app.saf.readSafBytes
 import zen.gtasaskinstudio.app.saf.readSafFileInfo
+import zen.gtasaskinstudio.app.scene.SceneBuffers
 
 /** Pose siap gambar: garis/titik di ruang model, dan geseran dari rig diam. / A drawable pose: lines/points in model space, plus the shift from the rest rig. */
-internal class PoseView(val geometry: AutoRigGeometry, val shift: FloatArray)
+internal class PoseView(val geometry: AutoRigGeometry, val shift: FloatArray, val vertices: FloatArray? = null)
 
 private sealed class IfpLoad {
     class Ok(val name: String, val file: IfpFile) : IfpLoad()
     class BadFormat(val reason: String) : IfpLoad()
     data object Unreadable : IfpLoad()
+}
+
+/** Bobot otomatis dari vertex scene dan tepi wireframe. / Auto weights from the scene vertices and wireframe edges. */
+private fun computeWeights(scene: SceneBuffers, rig: AutoRigResult): AutoWeightResult? {
+    val n = scene.vertexCount
+    val pos = FloatArray(n * 3) { scene.vertices[(it / 3) * 6 + it % 3] }
+    val wire = scene.wireIndices
+    val edges = IntArray(wire.size) { wire[it].toInt() and 0xFFFF }
+    return AutoWeights.compute(pos, edges, rig)
 }
 
 private fun loadIfp(context: Context, uri: Uri): IfpLoad {
@@ -86,6 +99,7 @@ private fun loadIfp(context: Context, uri: Uri): IfpLoad {
 internal fun RigTestPanel(
     lang: Lang,
     rig: AutoRigResult,
+    scene: SceneBuffers,
     mirror: Boolean,
     onMirror: (Boolean) -> Unit,
     onPose: (PoseView?) -> Unit,
@@ -103,6 +117,17 @@ internal fun RigTestPanel(
     var time by remember { mutableStateOf(0f) }
     var playing by remember { mutableStateOf(false) }
     var pickerOpen by remember { mutableStateOf(false) }
+    var follow by remember { mutableStateOf(true) }
+    var weights by remember(scene, rig) { mutableStateOf<AutoWeightResult?>(null) }
+    var weighting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(scene, rig, follow) {
+        if (follow && weights == null) {
+            weighting = true
+            weights = withContext(Dispatchers.Default) { computeWeights(scene, rig) }
+            weighting = false
+        }
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -132,15 +157,24 @@ internal fun RigTestPanel(
     val duration = remember(anim) { PosePlayer.duration(anim) }
     // Waktu dibulatkan ke 1/30 dtk supaya gambar tidak dihitung ulang tanpa perlu. / Time is rounded to 1/30 s so we do not recompute needlessly.
     val stepTime = Math.round(time * 30f) / 30f
-    val frame: PoseFrame? = remember(rig, anim, stepTime) { PosePlayer.pose(rig, anim, stepTime) }
+    val frame: PoseFrame? = remember(rig, anim, stepTime, follow) { PosePlayer.pose(rig, anim, stepTime, beside = !follow) }
 
-    LaunchedEffect(frame) {
+    LaunchedEffect(frame, weights, follow) {
         val f = frame
         if (f == null) {
             onPose(null)
         } else {
+            val wts = weights
+            val verts: FloatArray? = if (follow && wts != null) {
+                withContext(Dispatchers.Default) {
+                    val xf = SkinPreview.transforms(rig.joints, f.joints, wts.height)
+                    if (xf != null) SkinPreview.skin(scene.vertices, wts, xf) else null
+                }
+            } else {
+                null
+            }
             val g = AutoRig.geometry(AutoRigResult(rig.up, f.joints))
-            onPose(PoseView(g, FloatArray(3) { f.shift[it].toFloat() }))
+            onPose(PoseView(g, FloatArray(3) { f.shift[it].toFloat() }, verts))
         }
     }
     DisposableEffect(Unit) { onDispose { onPose(null) } }
@@ -177,7 +211,14 @@ internal fun RigTestPanel(
                 )
             }
         }
-        Text(lang.str(StrKey.RigTestNote), style = MaterialTheme.typography.bodySmall)
+        Text(
+            if (follow) {
+                if (weighting) lang.str(StrKey.RigTestWeighting) else lang.str(StrKey.RigTestFollowNote)
+            } else {
+                lang.str(StrKey.RigTestNote)
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
 
         if (file != null && duration > 0f) {
             Slider(
@@ -186,6 +227,14 @@ internal fun RigTestPanel(
                 valueRange = 0f..duration,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { follow = !follow },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(checked = follow, onCheckedChange = null)
+            Text(lang.str(StrKey.RigTestFollow), modifier = Modifier.padding(end = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
 
         Row(

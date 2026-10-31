@@ -139,6 +139,9 @@ internal fun ModelTab(
             val pv = poseView
             if (pv == null) {
                 scene.withSkeleton(g.lines, g.points)
+            } else if (pv.shift[0] == 0f && pv.shift[1] == 0f && pv.shift[2] == 0f) {
+                // Pose di tempat: mesh (bila dideformasi) dan skeleton berpose saja. / In-place pose: the (deformed) mesh and the posed skeleton only.
+                scene.withSkeleton(pv.geometry.lines, pv.geometry.points, vertices = pv.vertices ?: scene.vertices)
             } else {
                 val c = FloatArray(3) { scene.center[it] + pv.shift[it] * 0.5f }
                 val shiftLen = Math.sqrt((pv.shift[0] * pv.shift[0] + pv.shift[1] * pv.shift[1] + pv.shift[2] * pv.shift[2]).toDouble()).toFloat()
@@ -283,6 +286,7 @@ internal fun ModelTab(
                             RigTestPanel(
                                 lang = lang,
                                 rig = rigNow,
+                                scene = scene,
                                 mirror = rigMirror,
                                 onMirror = { m ->
                                     rigMirror = m

@@ -164,6 +164,9 @@ enum class StrKey {
     RigTestNote,
     RigTestIncomplete,
     RigTestLacking,
+    RigTestFollow,
+    RigTestWeighting,
+    RigTestFollowNote,
 }
 
 private val table: Map<StrKey, Pair<String, String>> = mapOf(
@@ -296,6 +299,12 @@ private val table: Map<StrKey, Pair<String, String>> = mapOf(
         ),
     StrKey.RigTestIncomplete to ("Rig belum lengkap, pose tidak bisa dimainkan." to "The rig is incomplete; the pose cannot be played."),
     StrKey.RigTestLacking to ("ped.ifp ini tidak memuat bone: %s" to "This ped.ifp lacks bones: %s"),
+    StrKey.RigTestFollow to ("Mesh ikut pose (bobot otomatis)" to "Mesh follows the pose (auto weights)"),
+    StrKey.RigTestWeighting to ("Menghitung bobot..." to "Computing weights..."),
+    StrKey.RigTestFollowNote to (
+        "Bobot otomatis hanya tebakan awal: puntiran lengan/kaki belum diikuti dan sendi bisa tampak patah." to
+            "Auto weights are only a first guess: arm/leg twist is not followed and joints may look broken."
+        ),
     StrKey.AutoRigNone to ("Model terlalu kecil atau datar untuk diestimasi." to "Model is too small or flat to estimate."),
     StrKey.SlotNone to ("Belum ada tekstur yang dipasang di slot ini." to "No texture attached to this slot."),
     StrKey.SlotAttached to ("Dipasang:" to "Attached:"),

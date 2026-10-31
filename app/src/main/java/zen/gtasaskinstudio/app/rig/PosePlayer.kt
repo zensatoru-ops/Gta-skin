@@ -197,8 +197,9 @@ object PosePlayer {
     /**
      * Memainkan [anim] di waktu [time] (detik) pada [rest]. Mengembalikan null bila skeleton tidak lengkap.
      * Plays [anim] at [time] seconds on [rest]. Returns null if the skeleton is incomplete.
+     * [beside] false menggambar pose di tempat (untuk mesh yang ikut bergerak). / false places the pose in place (for a mesh that follows).
      */
-    fun pose(rest: AutoRigResult, anim: IfpAnimation, time: Float): PoseFrame? {
+    fun pose(rest: AutoRigResult, anim: IfpAnimation, time: Float, beside: Boolean = true): PoseFrame? {
         val byName = rest.joints.associateBy { it.boneName }
         val bones = GtaStandardRig.BONES
         if (bones.any { it.name.isNotEmpty() && byName[it.name] == null }) return null
@@ -271,7 +272,7 @@ object PosePlayer {
         val lh = byName[" L Hand"]
         val rh = byName[" R Hand"]
         val span = if (lh != null && rh != null) dist(lh, rh) else 1.0
-        val shiftLen = span * 0.8
+        val shiftLen = if (beside) span * 0.8 else 0.0
         val shift = doubleArrayOf(lat[0] * shiftLen, lat[1] * shiftLen, lat[2] * shiftLen)
 
         val joints = ArrayList<AutoRigJoint>()

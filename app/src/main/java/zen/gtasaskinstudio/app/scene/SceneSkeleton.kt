@@ -9,6 +9,7 @@ fun SceneBuffers.withSkeleton(
     points: FloatArray,
     center: FloatArray = this.center,
     radius: Float = this.radius,
+    vertices: FloatArray = this.vertices,
 ): SceneBuffers = SceneBuffers(
     vertices = vertices,
     vertexCount = vertexCount,
